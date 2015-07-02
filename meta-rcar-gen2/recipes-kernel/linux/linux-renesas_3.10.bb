@@ -96,6 +96,7 @@ SRC_URI_append_lcb = " \
     file://stout/07-r8a7790-stout/0010-media-i2c-soc_camera-Add-ov10635-sensor-driver.patch \
     file://stout/07-r8a7790-stout/0011-media-soc_camera-add-10bit-format-for-rcar_vin.patch \
     file://stout/07-r8a7790-stout/0020-arm-rmobile-Add-R8A7790-stout-board-support.patch \
+    file://stout/07-r8a7790-stout/0022-arm-rmobile-Add-R8A7790-stout-full-board-support.patch \
 "
 
 SRC_URI_append_porter = " file://can.cfg"
