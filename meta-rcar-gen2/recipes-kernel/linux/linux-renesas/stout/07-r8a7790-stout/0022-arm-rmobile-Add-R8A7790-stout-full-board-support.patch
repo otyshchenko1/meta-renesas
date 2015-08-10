@@ -65,7 +65,7 @@ index 0000000..8366274
 +	};
 +
 +	chosen {
-+		bootargs = "console=ttySC0,38400 ignore_loglevel rw root=/dev/nfs ip=dhcp vmalloc=384M";
++		bootargs = "console=ttySC0,38400 ignore_loglevel rw root=/dev/nfs ip=dhcp vmalloc=384M video=HDMI-A-1:1024x768-32@60";
 +	};
 +
 +	memory@40000000 {
