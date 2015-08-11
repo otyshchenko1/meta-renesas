@@ -1,4 +1,4 @@
-FILESEXTRAPATHS_prepend := "${THISDIR}/${PN}:"
+FILESEXTRAPATHS_prepend := '${@ "${THISDIR}/${PN}-stout:" if 'stout' in '${MACHINE}' else "${THISDIR}/${PN}:"}'
 
 SRC_URI_append_rcar-gen2 = " file://weston.ini"
 
