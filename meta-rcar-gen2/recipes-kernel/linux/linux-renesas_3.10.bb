@@ -42,6 +42,14 @@ SRC_URI_append_lcb = " \
     file://0015-ARM-shmobile-defconfig-Enable-Bluetooth.patch \
     file://0016-ARM-shmobile-defconfig-Add-ATAG-DTB-compatibility.patch \
     file://0017-tty-serial-sh-sci-protect-SCSCR-register-access.patch \
+    file://0018-media-V4L-Add-mem2mem-ioctl-and-file-operation-helpe.patch \
+    file://0019-V4L2-platform-Add-Renesas-R-Car-JPEG-codec-driver.patch \
+    file://0020-devicetree-bindings-Document-Renesas-R-Car-JPEG-Proc.patch \
+    file://0021-MAINTAINERS-V4L2-PLATFORM-Add-entry-for-Renesas-JPEG.patch \
+    file://0022-ARM-shmobile-r8a7790-Add-JPU-clock-dt-and-CPG-define.patch \
+    file://0023-ARM-shmobile-r8a7791-Add-JPU-clock-dt-and-CPG-define.patch \
+    file://0024-ARM-shmobile-r8a7790-Add-JPU-device-node.patch \
+    file://0025-ARM-shmobile-r8a7791-Add-JPU-device-node.patch \
     file://stout/01-da9063_rtc/0001-rtc-da9063-RTC-driver.patch \
     file://stout/02-da9063_mfd/0001-mfd-da9063-Add-IRQ-support.patch \
     file://stout/02-da9063_mfd/0002-mfd-dialog-Constify-struct-mfd_cell-where-possible.patch \

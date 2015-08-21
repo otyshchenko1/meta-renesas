@@ -1,0 +1,36 @@
+From e1ab30ba2f8883aa50e34280caaa621294373b34 Mon Sep 17 00:00:00 2001
+From: Mikhail Ulyanov <mikhail.ulyanov@cogentembedded.com>
+Date: Fri, 7 Aug 2015 05:11:00 +0300
+Subject: [PATCH 25/25] ARM: shmobile: r8a7791: Add JPU device node.
+
+This patch contains device tree node definition for JPEG codec peripheral
+found in the Renesas R-Car r8a7791 SoC.
+
+Signed-off-by: Mikhail Ulyanov <mikhail.ulyanov@cogentembedded.com>
+Signed-off-by: Simon Horman <horms+renesas@verge.net.au>
+Signed-off-by: Andrey Gusakov <andrey.gusakov@cogentembedded.com>
+---
+ arch/arm/boot/dts/r8a7791.dtsi |    7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/arch/arm/boot/dts/r8a7791.dtsi b/arch/arm/boot/dts/r8a7791.dtsi
+index b3f0eb9..8fa296c 100644
+--- a/arch/arm/boot/dts/r8a7791.dtsi
++++ b/arch/arm/boot/dts/r8a7791.dtsi
+@@ -630,6 +630,13 @@
+ 		status = "disabled";
+ 	};
+ 
++	jpu: jpeg-codec@fe980000 {
++		compatible = "renesas,jpu-r8a7791";
++		reg = <0 0xfe980000 0 0x10300>;
++		interrupts = <0 272 IRQ_TYPE_LEVEL_HIGH>;
++		clocks = <&mstp1_clks R8A7791_CLK_JPU>;
++	};
++
+ 	clocks {
+ 		#address-cells = <2>;
+ 		#size-cells = <2>;
+-- 
+1.7.10.4
+
