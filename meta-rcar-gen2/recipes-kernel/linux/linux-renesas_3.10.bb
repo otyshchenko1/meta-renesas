@@ -111,9 +111,10 @@ SRC_URI_append_lcb = " \
 SRC_URI_append_porter = " file://porter.cfg"
 SRC_URI_append_stout = " file://stout.cfg"
 
-KERNEL_DEVICETREE_append_stout = '${@ " \
-	${S}/arch/arm/boot/dts/r8a7790-stout-full.dts \
-" if 'stout-full' in '${MACHINE_FEATURES}' else ""}'
+KERNEL_DEVICETREE_append_stout = '${@ \
+	"${S}/arch/arm/boot/dts/r8a7790-stout-full.dts" if 'stout-full' in '${MACHINE_FEATURES}' else \
+	"${S}/arch/arm/boot/dts/r8a7790-stout-view.dts" if 'stout-view' in '${MACHINE_FEATURES}' else \
+	""}'
 
 PATCHTOOL_rcar-gen2 = "git"
 
