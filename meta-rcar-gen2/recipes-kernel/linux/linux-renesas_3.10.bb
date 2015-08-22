@@ -108,7 +108,7 @@ SRC_URI_append_lcb = " \
     file://stout/07-r8a7790-stout/0023-arm-rmobile-Add-R8A7790-stout-view-board-support.patch \
 "
 
-SRC_URI_append_porter = " file://can.cfg"
+SRC_URI_append_porter = " file://porter.cfg"
 SRC_URI_append_stout = " file://stout.cfg"
 
 KERNEL_DEVICETREE_append_stout = '${@ " \
