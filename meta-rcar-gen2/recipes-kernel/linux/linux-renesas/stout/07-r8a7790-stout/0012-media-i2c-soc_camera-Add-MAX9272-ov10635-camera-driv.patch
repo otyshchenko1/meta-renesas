@@ -1,0 +1,315 @@
+From c8dc1934bfd77c9befd277162f4e2ef8e62312a0 Mon Sep 17 00:00:00 2001
+From: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
+Date: Mon, 24 Aug 2015 09:25:54 +0300
+Subject: [PATCH] media: i2c: soc_camera: Add MAX9272-ov10635 camera driver
+
+Add MAXIM max9272-max9271 with OmniVision ov10635 sensor camera driver
+
+Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
+---
+ drivers/media/i2c/soc_camera/Kconfig               |   7 +
+ drivers/media/i2c/soc_camera/Makefile              |   1 +
+ .../media/i2c/soc_camera/max9272_ov10635_setup.c   | 262 +++++++++++++++++++++
+ 3 files changed, 270 insertions(+)
+ create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
+
+diff --git a/drivers/media/i2c/soc_camera/Kconfig b/drivers/media/i2c/soc_camera/Kconfig
+index db97ee6..a37e201 100644
+--- a/drivers/media/i2c/soc_camera/Kconfig
++++ b/drivers/media/i2c/soc_camera/Kconfig
+@@ -80,6 +80,13 @@ config SOC_CAMERA_OV10635
+ 	help
+ 	  This is an OmniVision ov10635 camera driver
+ 
++config SOC_CAMERA_MAX9272_OV10635
++	tristate "max9272-ov10635 camera support"
++	depends on SOC_CAMERA && I2C
++	help
++	  This is an MAXIM max9272-max9271 with OmniVision ov10635 sensor
++	  camera driver
++
+ config SOC_CAMERA_RJ54N1
+ 	tristate "rj54n1cb0c support"
+ 	depends on SOC_CAMERA && I2C
+diff --git a/drivers/media/i2c/soc_camera/Makefile b/drivers/media/i2c/soc_camera/Makefile
+index f3d3403..370b069 100644
+--- a/drivers/media/i2c/soc_camera/Makefile
++++ b/drivers/media/i2c/soc_camera/Makefile
+@@ -11,5 +11,6 @@ obj-$(CONFIG_SOC_CAMERA_OV772X)		+= ov772x.o
+ obj-$(CONFIG_SOC_CAMERA_OV9640)		+= ov9640.o
+ obj-$(CONFIG_SOC_CAMERA_OV9740)		+= ov9740.o
+ obj-$(CONFIG_SOC_CAMERA_OV10635)	+= ov10635.o
++obj-$(CONFIG_SOC_CAMERA_MAX9272_OV10635)	+= max9272_ov10635_setup.o
+ obj-$(CONFIG_SOC_CAMERA_RJ54N1)		+= rj54n1cb0c.o
+ obj-$(CONFIG_SOC_CAMERA_TW9910)		+= tw9910.o
+diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
+new file mode 100644
+index 0000000..b615504
+--- /dev/null
++++ b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
+@@ -0,0 +1,262 @@
++/*
++ * MAXIM R-Car H2 Demo board setup driver
++ *
++ * Copyright (C) 2015 Cogent Embedded, Inc.
++ *
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ */
++
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++
++//#define DEBUG
++#ifdef DEBUG
++//#define WRITE_VERIFY
++#define MAXIM_DUMP
++#undef dev_dbg
++#define dev_dbg dev_info
++#endif
++
++#define MAX9275_PRESENT			/* MAX9275 presents on I2C bus */
++#define MAXIM_NUM		4	/* number of cameras */
++#define MAXIM_NUM_RETRIES	10	/* number of read/write retries */
++
++/*
++ * I2C MAP.
++ *
++ * MAX9275	0x40+6	- serializer
++ * MAX9276	0x48+6	- deserializer
++ *
++ * 		CAM0	CAM1	CAM2	CAM3
++ * MAX9272	0x48+1	0x48+2	0x48+3	0x48+4	- deserializer
++ * MAX9271	0x40+1	0x40+2	0x40+3	0x40+4	- serializer
++ * OV10635	0x30+1	0x30+2	0x30+3	0x30+4	- sensor
++ */
++
++static u8 maxim_map[][MAXIM_NUM] = {
++	{ 0x48 + 1, 0x48 + 2, 0x48 + 3, 0x48 + 4 },
++	{ 0x40 + 1, 0x40 + 2, 0x40 + 3, 0x40 + 4 },
++	{ 0x30 + 1, 0x30 + 2, 0x30 + 3, 0x30 + 4 },
++};
++
++static int maxim_reg8_read(struct i2c_client *client, u8 reg, u8 *val)
++{
++	int ret;
++	int retries = MAXIM_NUM_RETRIES;
++
++	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
++		ret = i2c_smbus_read_byte_data(client, reg);
++		if (!(ret < 0))
++			break;
++	}
++
++	if (ret < 0) {
++		dev_err(&client->dev,
++			"read fail: chip 0x%x register 0x%x\n", client->addr,
++								reg);
++	} else {
++		*val = ret;
++	}
++
++	return ret;
++}
++
++static int maxim_reg8_write(struct i2c_client *client, u8 reg, u8 val)
++{
++	int ret;
++	int retries = MAXIM_NUM_RETRIES;
++
++	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
++		ret = i2c_smbus_write_byte_data(client, reg, val);
++		if (!(ret < 0))
++			break;
++	}
++
++	if (ret < 0) {
++		dev_err(&client->dev,
++			"write fail: chip 0x%x register 0x%x\n", client->addr,
++								 reg);
++	} else {
++#ifdef WRITE_VERIFY
++		u8 val2;
++		maxim_reg8_read(client, reg, &val2);
++		if (val != val2)
++			dev_err(&client->dev,
++				"write verify mismatch: chip 0x%x reg=0x%x "
++				"0x%x->0x%x\n", client->addr, reg, val, val2);
++#endif
++	}
++
++	return ret;
++}
++
++static int maxim_reg16_write(struct i2c_client *client, u16 reg, u8 val)
++{
++	int ret;
++	int retries = MAXIM_NUM_RETRIES;
++	u8 buf[3] = {reg >> 8, reg & 0xff, val};
++
++	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
++		ret = i2c_master_send(client, buf, 3);
++		if (ret == 3)
++			break;
++	}
++
++	if (ret < 0) {
++		dev_err(&client->dev,
++			"write fail: chip 0x%x register 0x%x\n", client->addr,
++								 reg);
++	} else {
++#ifdef WRITE_VERIFY_X
++		u8 val2;
++		maxim_reg16_read(client, reg, &val2);
++		if (val != val2)
++			dev_err(&client->dev,
++				"write verify mismatch: chip 0x%x reg=0x%x "
++				"0x%x->0x%x\n", client->addr, reg, val, val2);
++#endif
++	}
++
++	return ret;
++}
++
++#ifdef MAXIM_DUMP
++static void maxim_dump_regs(struct i2c_client *client)
++{
++	int ret;
++	u8 reg;
++
++	dev_dbg(&client->dev, "dump regs 0x%x\n", client->addr);
++
++	for (reg = 0; reg < 0x20; reg++) {
++		ret = i2c_smbus_read_byte_data(client, reg);
++		if (ret < 0)
++			dev_err(&client->dev,
++				"read fail: chip 0x%x register 0x%x\n",
++				client->addr, reg);
++		printk("0x%02x ", ret);
++		if (((reg + 1) % 0x10) == 0)
++			printk("\n");
++	}
++}
++#endif /* MAXIM_DUMP */
++
++static int ov10635_probe(struct i2c_client *client,
++			 const struct i2c_device_id *did)
++{
++	u8 val;
++	int cam_idx, tmp_addr;
++
++	tmp_addr = client->addr;
++
++#ifdef MAX9275_PRESENT
++	/*
++	 * SETUP MAX9275 I2C
++	 */
++	dev_dbg(&client->dev, "SETUP MAX9275 I2C to 0x45<->04d\n");
++
++	client->addr = 0x48;						/* MAX9272-CAM0 I2C */
++	maxim_reg8_write(client, 0x0d, 0x36);				/* disable artificial ACK */
++	maxim_reg8_write(client, 0x04, 0x00);				/* disable reverse_control/serial_link/conf_link - this is to disable access to max9271-CAM0 */
++
++	client->addr = 0x40 + 6;					/* MAX9275 new I2C after reboot */
++	maxim_reg8_read(client, 0x1e, &val);				/* read ID */
++	if (val != 0x21) {
++		client->addr = 0x40;					/* MAX9275-CAM0 I2C after poweroff */
++		i2c_smbus_read_byte(client);				/* ping to wake-up */
++		maxim_reg8_write(client, 0x04, 0x00);			/* wake up, disable reverse_control/serial_link/conf_link */
++
++		maxim_reg8_write(client, 0x13, 0x36);			/* disable artificial ACK */
++		maxim_reg8_write(client, 0x01, (0x48 + 6) << 1);	/* set MAX9276 I2C pair to 0x48+6 */
++		maxim_reg8_write(client, 0x00, (0x40 + 6) << 1);	/* set MAX9275 I2C to 0x40+6 */
++
++//		client->addr = 0x40 + 6;				/* MAX9275 I2C new */
++//		maxim_reg8_write(client, 0x04, 0x10);			/* put to sleep, disable reverse_control/serial_link/conf_link */
++	}
++#endif
++
++	for (cam_idx = 0; cam_idx < MAXIM_NUM; cam_idx++) {
++		/*
++		 * SETUP CAMx (MAX9272/MAX9271/OV10635) I2C
++		 */
++		dev_dbg(&client->dev, "SETUP CAM%d (MAX9272/MAX9271/OV10635) I2C: 0x%x<->0x%x<->0x%x\n", cam_idx,
++				      maxim_map[0][cam_idx], maxim_map[1][cam_idx], maxim_map[2][cam_idx]);
++
++		client->addr = 0x48;					/* MAX9272-CAM0 I2C */
++		maxim_reg8_write(client, 0x04, 0x43);			/* enable reverse_control/conf_link */
++		maxim_reg8_write(client, 0x0d, 0xb6);			/* enable artificial ACKs - this is to wake up MAX9271-CAM0 */
++
++		client->addr = 0x40;					/* MAX9271-CAM0 I2C */
++		i2c_smbus_read_byte(client);				/* ping to wake-up */
++		maxim_reg8_write(client, 0x04, 0x43);			/* wake-up, enable reverse_control/conf_link */
++//		maxim_reg8_write(client, 0x09, maxim_map[2][cam_idx] << 1); /* i2c translator source A */
++//		maxim_reg8_write(client, 0x0A, maxim_map[2][cam_idx] << 1); /* i2c translator destination A */
++		maxim_reg8_write(client, 0x00, maxim_map[1][cam_idx] << 1); /* MAX9271-CAM0 I2C new */
++		mdelay(1);						/* delay required change address to take effect */
++
++		client->addr = maxim_map[1][cam_idx];			/* MAX9271-CAM0 I2C new */
++		maxim_reg8_write(client, 0x01, maxim_map[0][cam_idx] << 1); /* pair MAX9272-CAM0 I2C new */
++//		maxim_reg8_write(client, 0x0d, 0x36);			/* disable artificial ACK */
++
++		client->addr = 0x48;					/* MAX9272-CAM0 I2C */
++		maxim_reg8_write(client, 0x0d, 0x36);			/* disable artificial ACK */
++		maxim_reg8_write(client, 0x00, maxim_map[1][cam_idx] << 1); /* MAX9272-CAM0 I2C new */
++		maxim_reg8_write(client, 0x01, maxim_map[0][cam_idx] << 1); /* pair MAX9271-CAM0 I2C new */
++		mdelay(1);						/* delay required change address to take effect */
++
++		client->addr = 0x30;					/* OV10635-CAM0 I2C */
++		maxim_reg16_write(client, 0x300C, (maxim_map[2][cam_idx] << 1) | 0x1); /* OV10635 new */
++
++		client->addr = maxim_map[0][cam_idx];			/* MAX9272-CAM0 I2C new */
++		maxim_reg8_write(client, 0x0e, 0x78);			/* GP0 enable */
++
++#ifdef MAXIM_DUMP
++		client->addr = maxim_map[0][cam_idx];			/* MAX9272-CAM0 I2C new */
++		maxim_dump_regs(client);
++		client->addr = maxim_map[1][cam_idx];			/* MAX9271-CAM0 I2C new */
++		maxim_dump_regs(client);
++#endif
++	}
++
++	/* NOTE: I2C addr tmp_addr will occupied as UU */
++	client->addr = tmp_addr;
++
++	return 0;
++}
++
++static int ov10635_remove(struct i2c_client *client)
++{
++	return 0;
++}
++
++static const struct of_device_id ov10635_dt_ids[] = {
++	{ .compatible = "maxim,max9272-ov10635-setup" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, ov10635_dt_ids);
++
++static const struct i2c_device_id ov10635_id[] = {
++	{ "maxim_setup", 0 },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, ov10635_id);
++
++static struct i2c_driver ov10635_i2c_driver = {
++	.driver	= {
++		.name		= "maxim_setup",
++		.of_match_table	= of_match_ptr(ov10635_dt_ids),
++	},
++	.probe		= ov10635_probe,
++	.remove		= ov10635_remove,
++	.id_table	= ov10635_id,
++};
++
++module_i2c_driver(ov10635_i2c_driver);
++
++MODULE_DESCRIPTION("Setup driver for 4 SoC Cameras max9272<->ma9271<->OV10635");
++MODULE_AUTHOR("Vladimir Barinov");
++MODULE_LICENSE("GPL");
+-- 
+1.9.1
+
