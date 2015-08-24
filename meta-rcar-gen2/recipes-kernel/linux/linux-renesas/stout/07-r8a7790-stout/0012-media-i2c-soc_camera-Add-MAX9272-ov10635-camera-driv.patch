@@ -195,8 +195,8 @@ index 0000000..b615504
 +}
 +#endif /* MAXIM_DUMP */
 +
-+static int ov10635_probe(struct i2c_client *client,
-+			 const struct i2c_device_id *did)
++static int maxim_probe(struct i2c_client *client,
++			const struct i2c_device_id *did)
 +{
 +	u8 val;
 +	int cam_idx, tmp_addr;
@@ -278,36 +278,36 @@ index 0000000..b615504
 +	return 0;
 +}
 +
-+static int ov10635_remove(struct i2c_client *client)
++static int maxim_remove(struct i2c_client *client)
 +{
 +	return 0;
 +}
 +
-+static const struct of_device_id ov10635_dt_ids[] = {
++static const struct of_device_id maxim_dt_ids[] = {
 +	{ .compatible = "maxim,max9272-ov10635-setup" },
 +	{},
 +};
-+MODULE_DEVICE_TABLE(of, ov10635_dt_ids);
++MODULE_DEVICE_TABLE(of, maxim_dt_ids);
 +
-+static const struct i2c_device_id ov10635_id[] = {
++static const struct i2c_device_id maxim_id[] = {
 +	{ "maxim_setup", 0 },
 +	{ }
 +};
-+MODULE_DEVICE_TABLE(i2c, ov10635_id);
++MODULE_DEVICE_TABLE(i2c, maxim_id);
 +
-+static struct i2c_driver ov10635_i2c_driver = {
++static struct i2c_driver maxim_i2c_driver = {
 +	.driver	= {
 +		.name		= "maxim_setup",
-+		.of_match_table	= of_match_ptr(ov10635_dt_ids),
++		.of_match_table	= of_match_ptr(maxim_dt_ids),
 +	},
-+	.probe		= ov10635_probe,
-+	.remove		= ov10635_remove,
-+	.id_table	= ov10635_id,
++	.probe		= maxim_probe,
++	.remove		= maxim_remove,
++	.id_table	= maxim_id,
 +};
 +
-+module_i2c_driver(ov10635_i2c_driver);
++module_i2c_driver(maxim_i2c_driver);
 +
-+MODULE_DESCRIPTION("Setup driver for 4 SoC Cameras max9272<->ma9271<->OV10635");
++MODULE_DESCRIPTION("Setup driver for 4 SoC Cameras MAX9272<->MAX9271<->OV10635");
 +MODULE_AUTHOR("Vladimir Barinov");
 +MODULE_LICENSE("GPL");
 -- 
