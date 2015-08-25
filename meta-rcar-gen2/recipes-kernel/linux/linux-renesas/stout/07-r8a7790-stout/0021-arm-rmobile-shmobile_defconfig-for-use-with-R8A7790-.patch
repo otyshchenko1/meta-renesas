@@ -1,21 +1,21 @@
-From f108f13fb0993a087206938e00b5890bd47113b7 Mon Sep 17 00:00:00 2001
+From 1c8a9935f83262627cb830fbc3236f4cd22d81f5 Mon Sep 17 00:00:00 2001
 From: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
-Date: Fri, 15 May 2015 19:25:14 +0300
-Subject: [PATCH 2/2] arm: rmobile: shmobile_defconfig for use with
- R8A7790-stout board
+Date: Tue, 25 Aug 2015 13:22:03 +0300
+Subject: [PATCH] arm: rmobile: shmobile_defconfig for use with R8A7790-stout
+ board
 
 Update shmobile_defconfig for use with R8A7790-stout board
 
 Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
 ---
- arch/arm/configs/shmobile_defconfig | 9 +++++++++
- 1 file changed, 9 insertions(+)
+ arch/arm/configs/shmobile_defconfig | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
 
 diff --git a/arch/arm/configs/shmobile_defconfig b/arch/arm/configs/shmobile_defconfig
-index 25aad88..21e700a 100644
+index 1e42870..c65fae8 100644
 --- a/arch/arm/configs/shmobile_defconfig
 +++ b/arch/arm/configs/shmobile_defconfig
-@@ -111,6 +111,7 @@ CONFIG_NETDEVICES=y
+@@ -113,6 +113,7 @@ CONFIG_NETDEVICES=y
  # CONFIG_NET_VENDOR_MICREL is not set
  # CONFIG_NET_VENDOR_NATSEMI is not set
  CONFIG_SH_ETH=y
@@ -23,7 +23,7 @@ index 25aad88..21e700a 100644
  # CONFIG_NET_VENDOR_SEEQ is not set
  CONFIG_SMSC911X=y
  # CONFIG_NET_VENDOR_STMICRO is not set
-@@ -142,14 +143,21 @@ CONFIG_SPI_RSPI=y
+@@ -144,14 +145,21 @@ CONFIG_SPI_RSPI=y
  CONFIG_SPI_SH_MSIOF=y
  CONFIG_SPI_SH_HSPI=y
  CONFIG_SPI_SPIDEV=y
@@ -45,7 +45,22 @@ index 25aad88..21e700a 100644
  CONFIG_REGULATOR_DA9210=y
  CONFIG_MEDIA_SUPPORT=y
  CONFIG_MEDIA_CAMERA_SUPPORT=y
-@@ -199,6 +207,7 @@ CONFIG_LEDS_CLASS=y
+@@ -164,11 +172,14 @@ CONFIG_VIDEO_RCAR_VIN=y
+ CONFIG_VIDEO_RCAR_VIN_BURST_SIZE_64BYTE=y
+ CONFIG_VIDEO_SH_MOBILE_CEU=y
+ CONFIG_V4L_MEM2MEM_DRIVERS=y
++CONFIG_VIDEO_RENESAS_JPU=y
+ CONFIG_VIDEO_RENESAS_VSP1=y
+ # CONFIG_MEDIA_SUBDRV_AUTOSELECT is not set
+ CONFIG_VIDEO_ADV7180=y
+ CONFIG_VIDEO_ADV7612=y
+ CONFIG_SOC_CAMERA_MT9T112=y
++CONFIG_SOC_CAMERA_OV10635=y
++CONFIG_SOC_CAMERA_MAX9272_OV10635=y
+ # CONFIG_VGA_ARB is not set
+ CONFIG_DRM=y
+ CONFIG_DRM_ADV7511=y
+@@ -201,6 +212,7 @@ CONFIG_LEDS_CLASS=y
  CONFIG_LEDS_GPIO=y
  CONFIG_RTC_CLASS=y
  CONFIG_RTC_DRV_S35390A=y
