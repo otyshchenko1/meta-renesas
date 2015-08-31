@@ -1,21 +1,23 @@
-From 56f9340626dffe1f0a5cfc01cf401af24c8b7811 Mon Sep 17 00:00:00 2001
+From a31c23a23e9be75306e12dd889b3656c5286c34c Mon Sep 17 00:00:00 2001
 From: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
-Date: Tue, 25 Aug 2015 11:38:53 +0300
+Date: Mon, 31 Aug 2015 22:55:33 +0300
 Subject: [PATCH] media: i2c: soc_camera: Add MAX9272-ov10635 camera driver
 
 Add MAXIM max9272-max9271 with OmniVision ov10635 sensor camera driver
 
 Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
 ---
- drivers/media/i2c/soc_camera/Kconfig               |    7 +
- drivers/media/i2c/soc_camera/Makefile              |    1 +
- drivers/media/i2c/soc_camera/max9272_ov10635.c     | 1109 ++++++++++++++++++++
- drivers/media/i2c/soc_camera/max9272_ov10635.h     |  186 ++++
- .../media/i2c/soc_camera/max9272_ov10635_setup.c   |  138 +++
- 5 files changed, 1441 insertions(+)
+ drivers/media/i2c/soc_camera/Kconfig               |   7 +
+ drivers/media/i2c/soc_camera/Makefile              |   1 +
+ drivers/media/i2c/soc_camera/max9272_ov10635.c     | 621 +++++++++++++++++++++
+ drivers/media/i2c/soc_camera/max9272_ov10635.h     | 186 ++++++
+ .../media/i2c/soc_camera/max9272_ov10635_setup.c   | 167 ++++++
+ .../media/i2c/soc_camera/max9272_ov10635_wizard.h  | 296 ++++++++++
+ 6 files changed, 1278 insertions(+)
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.c
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.h
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
+ create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635_wizard.h
 
 diff --git a/drivers/media/i2c/soc_camera/Kconfig b/drivers/media/i2c/soc_camera/Kconfig
 index db97ee6..a37e201 100644
@@ -48,10 +50,10 @@ index f3d3403..d1b00b5 100644
  obj-$(CONFIG_SOC_CAMERA_TW9910)		+= tw9910.o
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635.c b/drivers/media/i2c/soc_camera/max9272_ov10635.c
 new file mode 100644
-index 0000000..8db0df9
+index 0000000..e82ab68
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635.c
-@@ -0,0 +1,1109 @@
+@@ -0,0 +1,621 @@
 +/*
 + * MAXIM max9272-max9271 with OmniVision ov10635 sensor camera driver
 + *
@@ -64,24 +66,24 @@ index 0000000..8db0df9
 + */
 +
 +#include <linux/delay.h>
++#include <linux/init.h>
 +#include <linux/i2c.h>
 +#include <linux/module.h>
-+#include <linux/slab.h>
-+#include <linux/v4l2-mediabus.h>
 +#include <linux/videodev2.h>
 +
 +#include <media/soc_camera.h>
 +#include <media/v4l2-common.h>
 +
 +#include "max9272_ov10635.h"
++#include "max9272_ov10635_wizard.h"
 +
-+/* Register definitions */
++#define OV10635_XVCLK			24000000
++
 +#define OV10635_VFLIP			0x381c
 +#define OV10635_VFLIP_SUBSAMPLE		0x1
 +#define OV10635_PID			0x300a
 +#define OV10635_VER			0x300b
 +
-+/* IDs */
 +#define OV10635_VERSION_REG		0xa635
 +#define OV10635_VERSION(pid, ver)	(((pid) << 8) | ((ver) & 0xff))
 +
@@ -90,37 +92,1009 @@ index 0000000..8db0df9
 +#define OV10635_MAX_WIDTH		1280
 +#define OV10635_MAX_HEIGHT		800
 +
-+//#define OV10635_DISPLAY_PATTERN
-+//#define OV10635_10BIT_DEFAULT
-+
-+struct ov10635_color_format {
-+	enum v4l2_mbus_pixelcode code;
-+	enum v4l2_colorspace colorspace;
++struct ov10635_priv {
++	struct v4l2_subdev	sd;
++	int			width;
++	int			height;
 +};
++
++static inline struct ov10635_priv *to_ov10635(const struct i2c_client *client)
++{
++	return container_of(i2c_get_clientdata(client), struct ov10635_priv, sd);
++}
++
++static int maxim_reg16_write16(struct i2c_client *client, u16 reg, u16 val)
++{
++	int ret;
++
++	ret = maxim_reg16_write(client, reg, val >> 8);
++	if (ret)
++		return ret;
++
++	ret = maxim_reg16_write(client, reg + 1, val & 0xff);
++	if (ret)
++		return ret;
++
++	return 0;
++}
++
++static int ov10635_reg_rmw(struct i2c_client *client, u16 reg, u8 set, u8 unset)
++{
++	u8 val;
++	int ret;
++
++	ret = maxim_reg16_read(client, reg, &val);
++	if (ret) {
++		dev_err(&client->dev,
++			"[Read]-Modify-Write of register %04x failed!\n", reg);
++		return ret;
++	}
++
++	val |= set;
++	val &= ~unset;
++
++	ret = maxim_reg16_write(client, reg, val);
++	if (ret)
++		dev_err(&client->dev,
++			"Read-Modify-[Write] of register %04x failed!\n", reg);
++
++	return ret;
++}
++
++static int ov10635_set_regs(struct i2c_client *client,
++	const struct ov10635_reg *regs, int nr_regs)
++{
++	int i, ret;
++
++	for (i = 0; i < nr_regs; i++) {
++		ret = maxim_reg16_write(client, regs[i].reg, regs[i].val);
++#if 0 /* Do not stop on write fail .... */
++		if (ret)
++			return ret;
++#endif
++	}
++
++	return 0;
++}
++
++static int ov10635_set_stream(struct v4l2_subdev *sd, int enable)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(sd);
++	int cam_idx = client->addr - 0x31;
++	int tmp_addr;
++
++	maxim_reg16_write(client, 0x0100, enable);
++
++	tmp_addr = client->addr;
++	if (enable) {
++		/* Disable reverse_control is required for access without error for cascaded chips ! */
++		client->addr = maxim_map[1][cam_idx];	/* MAX9271-CAMx */
++		maxim_reg8_write(client, 0x04, 0x83);	/* enable reverse_control/serial_link */
++//		maxim_reg8_write(client, 0x04, 0x80);	/* disable reverse_control, enable serial_link */
++		client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAMx */
++		maxim_reg8_write(client, 0x04, 0x80);	/* disable reverse_control, enable serial_link */
++		mdelay(5);				/* wait 2ms after changing reverse_control */
++	} else {
++		client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAMx */
++		maxim_reg8_write(client, 0x04, 0x43);	/* enable reverse_control/conf_link */
++		mdelay(5);				/* wait 5ms for conf_link to establish */
++		client->addr = maxim_map[1][cam_idx];	/* MAX9271-CAMx */
++		maxim_reg8_write(client, 0x04, 0x43);	/* enable reverse_control/conf_link */
++		mdelay(5);				/* wait 5ms for conf_link to establish */
++	}
++	client->addr = tmp_addr;
++
++	return 0;
++}
++
++static int ov10635_s_stream(struct v4l2_subdev *sd, int enable)
++{
++//	return ov10635_set_stream(sd, enable);
++	return 0;
++}
++
++/*
++ * Get the best pixel clock (pclk) that meets minimum hts/vts requirements.
++ * xvclk => pre-divider => clk1 => multiplier => clk2 => post-divider => pclk
++ * We try all valid combinations of settings for the 3 blocks to get the pixel
++ * clock, and from that calculate the actual hts/vts to use. The vts is
++ * extended so as to achieve the required frame rate. The function also returns
++ * the PLL register contents needed to set the pixel clock.
++ */
++static int ov10635_get_pclk(int xvclk, int *htsmin, int *vtsmin,
++			    int fps_numerator, int fps_denominator,
++			    u8 *r3003, u8 *r3004)
++{
++	int pre_divs[] = { 2, 3, 4, 6, 8, 10, 12, 14 };
++	int pclk;
++	int best_pclk = INT_MAX;
++	int best_hts = 0;
++	int i, j, k;
++	int best_i = 0, best_j = 0, best_k = 0;
++	int clk1, clk2;
++	int hts;
++
++	/* Pre-div, reg 0x3004, bits 6:4 */
++	for (i = 0; i < ARRAY_SIZE(pre_divs); i++) {
++		clk1 = (xvclk / pre_divs[i]) * 2;
++
++		if ((clk1 < 3000000) || (clk1 > 27000000))
++			continue;
++
++		/* Mult = reg 0x3003, bits 5:0 */
++		for (j = 1; j < 32; j++) {
++			clk2 = (clk1 * j);
++
++			if ((clk2 < 200000000) || (clk2 > 500000000))
++				continue;
++
++			/* Post-div, reg 0x3004, bits 2:0 */
++			for (k = 0; k < 8; k++) {
++				pclk = clk2 / (2*(k+1));
++
++				if (pclk > 96000000)
++					continue;
++
++				hts = *htsmin + 200 + pclk/300000;
++
++				/* 2 clock cycles for every YUV422 pixel */
++				if (pclk < (((hts * *vtsmin)/fps_denominator)
++					* fps_numerator * 2))
++					continue;
++
++				if (pclk < best_pclk) {
++					best_pclk = pclk;
++					best_hts = hts;
++					best_i = i;
++					best_j = j;
++					best_k = k;
++				}
++			}
++		}
++	}
++
++	/* register contents */
++	*r3003 = (u8)best_j;
++	*r3004 = ((u8)best_i << 4) | (u8)best_k;
++
++	/* Did we get a valid PCLK? */
++	if (best_pclk == INT_MAX)
++		return -1;
++
++	*htsmin = best_hts;
++
++	/* Adjust vts to get as close to the desired frame rate as we can */
++	*vtsmin = best_pclk / ((best_hts/fps_denominator) * fps_numerator * 2);
++
++	return best_pclk;
++}
++
++static int ov10635_set_params(struct i2c_client *client)
++{
++	struct ov10635_priv *priv = to_ov10635(client);
++	int ret = -EINVAL;
++	int pclk;
++	int hts, vts;
++	u8 r3003, r3004;
++	int tmp;
++	u32 height_pre_subsample;
++	u32 width_pre_subsample;
++	u8 horiz_crop_mode;
++	int nr_isp_pixels;
++	int vert_sub_sample = 0;
++	int horiz_sub_sample = 0;
++	int sensor_width;
++
++	priv->width = OV10635_MAX_WIDTH;
++	priv->height = OV10635_MAX_HEIGHT;
++
++	/* Vertical sub-sampling? */
++	height_pre_subsample = priv->height;
++	if (priv->height <= 400) {
++		vert_sub_sample = 1;
++		height_pre_subsample <<= 1;
++	}
++
++	/* Horizontal sub-sampling? */
++	width_pre_subsample = priv->width;
++	if (priv->width <= 640) {
++		horiz_sub_sample = 1;
++		width_pre_subsample <<= 1;
++	}
++
++	/* Horizontal cropping */
++	if (width_pre_subsample > 768) {
++		sensor_width = OV10635_SENSOR_WIDTH;
++		horiz_crop_mode = 0x63;
++	} else if (width_pre_subsample > 656) {
++		sensor_width = 768;
++		horiz_crop_mode = 0x6b;
++	} else {
++		sensor_width = 656;
++		horiz_crop_mode = 0x73;
++	}
++
++	/* minimum values for hts and vts */
++	hts = sensor_width;
++	vts = height_pre_subsample + 50;
++	dev_dbg(&client->dev, "fps=(%d/%d), hts=%d, vts=%d\n", 25, 1, hts, vts);
++
++	/* Get the best PCLK & adjust hts,vts accordingly */
++	pclk = ov10635_get_pclk(OV10635_XVCLK, &hts, &vts, 25, 1, &r3003, &r3004);
++	if (pclk < 0)
++		return ret;
++	dev_dbg(&client->dev, "pclk=%d, hts=%d, vts=%d\n", pclk, hts, vts);
++	dev_dbg(&client->dev, "r3003=0x%X r3004=0x%X\n", r3003, r3004);
++
++	/* Disable ISP & program all registers that we might modify */
++	ret = ov10635_set_regs(client, ov10635_regs_change_mode,
++		ARRAY_SIZE(ov10635_regs_change_mode));
++	if (ret)
++		return ret;
++
++#if 1
++	/* Set PLL */
++	ret = maxim_reg16_write(client, 0x3003, r3003);
++	if (ret)
++		return ret;
++	ret = maxim_reg16_write(client, 0x3004, r3004);
++	if (ret)
++		return ret;
++#endif
++
++	/* Set format to UYVY */
++	ret = maxim_reg16_write(client, 0x4300, 0x3a);
++	if (ret)
++		return ret;
++
++	/* Set mode to 8-bit BT.656 */
++	ret = ov10635_set_regs(client, ov10635_regs_bt656,
++		ARRAY_SIZE(ov10635_regs_bt656));
++	if (ret)
++		return ret;
++
++	/* Set output to 8-bit yuv */
++	ret = maxim_reg16_write(client, 0x4605, 0x08);
++	if (ret)
++		return ret;
++
++	/* Horizontal cropping */
++	ret = maxim_reg16_write(client, 0x3621, horiz_crop_mode);
++	if (ret)
++		return ret;
++
++	ret = maxim_reg16_write(client, 0x3702, (pclk+1500000)/3000000);
++	if (ret)
++		return ret;
++	ret = maxim_reg16_write(client, 0x3703, (pclk+666666)/1333333);
++	if (ret)
++		return ret;
++	ret = maxim_reg16_write(client, 0x3704, (pclk+961500)/1923000);
++	if (ret)
++		return ret;
++
++	/* Vertical cropping */
++	tmp = ((OV10635_SENSOR_HEIGHT - height_pre_subsample) / 2) & ~0x1;
++	ret = maxim_reg16_write16(client, 0x3802, tmp);
++	if (ret)
++		return ret;
++	tmp = tmp + height_pre_subsample + 3;
++	ret = maxim_reg16_write16(client, 0x3806, tmp);
++	if (ret)
++		return ret;
++
++	/* Output size */
++	ret = maxim_reg16_write16(client, 0x3808, priv->width);
++	if (ret)
++		return ret;
++	ret = maxim_reg16_write16(client, 0x380a, priv->height);
++	if (ret)
++		return ret;
++
++	ret = maxim_reg16_write16(client, 0x380c, hts);
++	if (ret)
++		return ret;
++
++	ret = maxim_reg16_write16(client, 0x380e, vts);
++	if (ret)
++		return ret;
++
++	if (vert_sub_sample) {
++		ret = ov10635_reg_rmw(client, OV10635_VFLIP,
++				      OV10635_VFLIP_SUBSAMPLE, 0);
++		if (ret)
++			return ret;
++
++		ret = ov10635_set_regs(client, ov10635_regs_vert_sub_sample,
++			ARRAY_SIZE(ov10635_regs_vert_sub_sample));
++		if (ret)
++			return ret;
++	}
++
++	ret = maxim_reg16_write16(client, 0x4606, 2*hts);
++	if (ret)
++		return ret;
++	ret = maxim_reg16_write16(client, 0x460a, 2*(hts-width_pre_subsample));
++	if (ret)
++		return ret;
++
++	tmp = (vts - 8) * 16;
++	ret = maxim_reg16_write16(client, 0xc488, tmp);
++	if (ret)
++		return ret;
++	ret = maxim_reg16_write16(client, 0xc48a, tmp);
++	if (ret)
++		return ret;
++
++	nr_isp_pixels = sensor_width * (priv->height + 4);
++	ret = maxim_reg16_write16(client, 0xc4cc, nr_isp_pixels/256);
++	if (ret)
++		return ret;
++	ret = maxim_reg16_write16(client, 0xc4ce, nr_isp_pixels/256);
++	if (ret)
++		return ret;
++	ret = maxim_reg16_write16(client, 0xc512, nr_isp_pixels/16);
++	if (ret)
++		return ret;
++
++	/* Horizontal sub-sampling */
++	if (horiz_sub_sample) {
++		ret = maxim_reg16_write(client, 0x5005, 0x9);
++		if (ret)
++			return ret;
++
++		ret = maxim_reg16_write(client, 0x3007, 0x2);
++		if (ret)
++			return ret;
++	}
++
++	ret = maxim_reg16_write16(client, 0xc518, vts);
++	if (ret)
++		return ret;
++	ret = maxim_reg16_write16(client, 0xc51a, hts);
++	if (ret)
++		return ret;
++
++	/* Enable ISP blocks */
++	ret = ov10635_set_regs(client, ov10635_regs_enable,
++		ARRAY_SIZE(ov10635_regs_enable));
++	if (ret)
++		return ret;
++
++	return 0;
++}
++
++static int ov10635_g_fmt(struct v4l2_subdev *sd,
++			struct v4l2_mbus_framefmt *mf)
++{
++	mf->width	= OV10635_MAX_WIDTH;
++	mf->height	= OV10635_MAX_HEIGHT;
++	mf->code	= V4L2_MBUS_FMT_YUYV8_2X8;
++	mf->colorspace	= V4L2_COLORSPACE_SMPTE170M;
++	mf->field	= V4L2_FIELD_NONE;
++
++	return 0;
++}
++
++static int ov10635_try_fmt(struct v4l2_subdev *sd,
++			   struct v4l2_mbus_framefmt *mf)
++{
++	mf->code = V4L2_MBUS_FMT_YUYV8_2X8;
++	mf->colorspace = V4L2_COLORSPACE_SMPTE170M;
++	mf->field = V4L2_FIELD_NONE;
++
++	return 0;
++}
++
++static int ov10635_enum_fmt(struct v4l2_subdev *sd, unsigned int index,
++			    enum v4l2_mbus_pixelcode *code)
++{
++	if (index > 0)
++		return -EINVAL;
++
++	*code = V4L2_MBUS_FMT_YUYV8_2X8;
++
++	return 0;
++}
++
++static int ov10635_g_mbus_config(struct v4l2_subdev *sd,
++				 struct v4l2_mbus_config *cfg)
++{
++	cfg->flags = V4L2_MBUS_MASTER | V4L2_MBUS_PCLK_SAMPLE_RISING |
++		     V4L2_MBUS_DATA_ACTIVE_HIGH;
++	cfg->type = V4L2_MBUS_BT656;
++
++	return 0;
++}
++
++#ifdef CONFIG_VIDEO_ADV_DEBUG
++static int max9272_ov10635_g_register(struct v4l2_subdev *sd,
++				      struct v4l2_dbg_register *reg)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(sd);
++	int ret;
++	u8 val;
++
++	ret = maxim_reg16_read(client, (u16)reg->reg, &val);
++	if (ret < 0)
++		return ret;
++
++	reg->val = ret;
++	reg->size = sizeof(u8);
++
++	return 0;
++}
++
++static int max9272_ov10635_s_register(struct v4l2_subdev *sd,
++				      const struct v4l2_dbg_register *reg)
++{
++	struct i2c_client *client = v4l2_get_subdevdata(sd);
++
++	return maxim_reg16_write(client, (u16)reg->reg, (u8)reg->val);
++}
++#endif
++
++static struct v4l2_subdev_core_ops ov10635_core_ops = {
++#ifdef CONFIG_VIDEO_ADV_DEBUG
++	.g_register = max9272_ov10635_g_register,
++	.s_register = max9272_ov10635_s_register,
++#endif
++};
++
++static struct v4l2_subdev_video_ops ov10635_video_ops = {
++	.s_stream	= ov10635_s_stream,
++	.g_mbus_fmt	= ov10635_g_fmt,
++	.try_mbus_fmt	= ov10635_try_fmt,
++	.enum_mbus_fmt	= ov10635_enum_fmt,
++	.g_mbus_config	= ov10635_g_mbus_config,
++};
++
++static struct v4l2_subdev_ops ov10635_subdev_ops = {
++	.core	= &ov10635_core_ops,
++	.video	= &ov10635_video_ops,
++};
++
++static int ov10635_initialize(struct i2c_client *client)
++{
++	u8 pid, ver;
++	int ret;
++	int tmp_addr, cam_idx;
++	struct ov10635_priv *priv = to_ov10635(client);
++
++	tmp_addr = client->addr;
++	cam_idx = client->addr - 0x31;
++	client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAMx */
++	maxim_reg8_write(client, 0x04, 0x43);	/* enable reverse_control/conf_link (i2c operation) */
++	mdelay(5);				/* wait 5ms for conf_link to establish */
++	client->addr = tmp_addr;
++
++	/* check and show product ID and manufacturer ID */
++	ret = maxim_reg16_read(client, OV10635_PID, &pid);
++	if (ret)
++		return ret;
++	ret = maxim_reg16_read(client, OV10635_VER, &ver);
++	if (ret)
++		return ret;
++
++	if (OV10635_VERSION(pid, ver) != OV10635_VERSION_REG) {
++		dev_err(&client->dev, "Product ID error %x:%x\n", pid, ver);
++		return -ENODEV;
++	}
++
++	dev_info(&client->dev, "ov10635 Product ID %x Manufacturer ID %x\n",
++		 pid, ver);
++
++	/* Program wizard register */
++	ret = ov10635_set_regs(client, ov10635_regs_default,
++		ARRAY_SIZE(ov10635_regs_default));
++	if (ret)
++		return ret;
++
++	ret = ov10635_set_params(client);
++	if (ret)
++		return ret;
++
++#if 1
++	/* enable pads back */
++	maxim_reg16_write(client, 0x3000, 0);
++	maxim_reg16_write(client, 0x3001, 0);
++	maxim_reg16_write(client, 0x3002, 0);
++
++	maxim_reg16_write(client, 0x300e, 0);
++	maxim_reg16_write(client, 0x300f, 0);
++//	maxim_reg16_write(client, 0x3010, ~BIT(5));
++	maxim_reg16_write(client, 0x3010, 0);
++#endif
++
++	ret = ov10635_set_stream(&priv->sd, 1);
++	if (ret)
++		return ret;
++
++	return 0;
++}
++
++static int ov10635_probe(struct i2c_client *client,
++			 const struct i2c_device_id *did)
++{
++	struct ov10635_priv *priv;
++	int ret;
++	struct soc_camera_subdev_desc *ssdd = soc_camera_i2c_to_desc(client);
++
++	if (!ssdd) {
++		dev_err(&client->dev, "Missing platform_data for driver\n");
++		return -EINVAL;
++	}
++
++	priv = devm_kzalloc(&client->dev, sizeof(*priv), GFP_KERNEL);
++	if (!priv)
++		return -ENOMEM;
++
++	v4l2_i2c_subdev_init(&priv->sd, client, &ov10635_subdev_ops);
++
++	ret = ov10635_initialize(client);
++	if (ret < 0)
++		goto cleanup;
++
++	v4l_info(client, "chip found @ 0x%02x (%s)\n",
++		 client->addr, client->adapter->name);
++	return 0;
++
++cleanup:
++	v4l2_device_unregister_subdev(&priv->sd);
++	v4l_err(client, "failed to probe @ 0x%02x (%s)\n",
++		client->addr, client->adapter->name);
++	return ret;
++}
++
++static int ov10635_remove(struct i2c_client *client)
++{
++	struct ov10635_priv *priv = i2c_get_clientdata(client);
++
++	v4l2_device_unregister_subdev(&priv->sd);
++
++	return 0;
++}
++
++static const struct i2c_device_id ov10635_id[] = {
++	{ "max9272-ov10635", 0 },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, ov10635_id);
++
++static struct i2c_driver ov10635_i2c_driver = {
++	.driver	= {
++		.name	= "max9272-ov10635",
++	},
++	.probe		= ov10635_probe,
++	.remove		= ov10635_remove,
++	.id_table	= ov10635_id,
++};
++
++module_i2c_driver(ov10635_i2c_driver);
++
++MODULE_DESCRIPTION("SoC Camera driver for MAX9272<->MAX9271<->OV10635");
++MODULE_AUTHOR("Vladimir Barinov");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635.h b/drivers/media/i2c/soc_camera/max9272_ov10635.h
+new file mode 100644
+index 0000000..249bd7c
+--- /dev/null
++++ b/drivers/media/i2c/soc_camera/max9272_ov10635.h
+@@ -0,0 +1,186 @@
++/*
++ * MAXIM R-Car H2 Demo board setup include file
++ *
++ * Copyright (C) 2015 Cogent Embedded, Inc.
++ *
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ */
++
++//#define DEBUG
++#ifdef DEBUG
++//#define WRITE_VERIFY
++#define MAXIM_DUMP
++#undef dev_dbg
++#define dev_dbg dev_info
++#endif
++
++#define MAX9275_PRESENT			/* MAX9275 presents on I2C bus */
++#define MAXIM_NUM		4	/* number of cameras */
++#define MAXIM_NUM_RETRIES	1	/* number of read/write retries */
++
++/*
++ * I2C MAP.
++ *
++ * MAX9275	0x40+6	- serializer
++ * MAX9276	0x48+6	- deserializer
++ *
++ * 		CAM0	CAM1	CAM2	CAM3
++ * MAX9272	0x48+1	0x48+2	0x48+3	0x48+4	- deserializer
++ * MAX9271	0x40+1	0x40+2	0x40+3	0x40+4	- serializer
++ * OV10635	0x30+1	0x30+2	0x30+3	0x30+4	- sensor
++ */
++
++static u8 maxim_map[][4] = {
++	{ 0x48 + 1, 0x48 + 2, 0x48 + 3, 0x48 + 4 },
++	{ 0x40 + 1, 0x40 + 2, 0x40 + 3, 0x40 + 4 },
++	{ 0x30 + 1, 0x30 + 2, 0x30 + 3, 0x30 + 4 },
++};
++
++static int maxim_reg8_read(struct i2c_client *client, u8 reg, u8 *val)
++{
++	int ret;
++	int retries = MAXIM_NUM_RETRIES;
++
++	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
++		ret = i2c_smbus_read_byte_data(client, reg);
++		if (!(ret < 0))
++			break;
++	}
++
++	if (ret < 0) {
++		dev_err(&client->dev,
++			"read fail: chip 0x%x register 0x%x\n", client->addr,
++								reg);
++	} else {
++		*val = ret;
++	}
++
++	return ret;
++}
++
++static int maxim_reg8_write(struct i2c_client *client, u8 reg, u8 val)
++{
++	int ret;
++	int retries = MAXIM_NUM_RETRIES;
++
++	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
++		ret = i2c_smbus_write_byte_data(client, reg, val);
++		if (!(ret < 0))
++			break;
++	}
++
++	if (ret < 0) {
++		dev_err(&client->dev,
++			"write fail: chip 0x%x register 0x%x\n", client->addr,
++								 reg);
++	} else {
++#ifdef WRITE_VERIFY
++		u8 val2;
++		maxim_reg8_read(client, reg, &val2);
++		if (val != val2)
++			dev_err(&client->dev,
++				"write verify mismatch: chip 0x%x reg=0x%x "
++				"0x%x->0x%x\n", client->addr, reg, val, val2);
++#endif
++	}
++
++	return ret;
++}
++
++static int maxim_reg16_read(struct i2c_client *client, u16 reg, u8 *val)
++{
++	int ret;
++	int retries = MAXIM_NUM_RETRIES;
++	u8 buf[2] = {reg >> 8, reg & 0xff};
++
++	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
++		ret = i2c_master_send(client, buf, 2);
++		if (ret == 2) {
++			ret = i2c_master_recv(client, buf, 1);
++			if (ret == 1)
++				break;
++		}
++	}
++
++	if (ret < 0) {
++		dev_err(&client->dev,
++			"read fail: chip 0x%x register 0x%x\n", client->addr,
++								reg);
++	} else {
++		*val = buf[0];
++	}
++
++	return ret < 0 ? ret : 0;
++}
++
++static int maxim_reg16_write(struct i2c_client *client, u16 reg, u8 val)
++{
++	int ret;
++	int retries = MAXIM_NUM_RETRIES;
++	u8 buf[3] = {reg >> 8, reg & 0xff, val};
++
++	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
++		ret = i2c_master_send(client, buf, 3);
++		if (ret == 3)
++			break;
++	}
++
++	if (ret < 0) {
++		dev_err(&client->dev,
++			"write fail: chip 0x%x register 0x%x\n", client->addr,
++								 reg);
++	} else {
++#ifdef WRITE_VERIFY
++		u8 val2;
++		maxim_reg16_read(client, reg, &val2);
++		if (val != val2)
++			dev_err(&client->dev,
++				"write verify mismatch: chip 0x%x reg=0x%x "
++				"0x%x->0x%x\n", client->addr, reg, val, val2);
++#endif
++	}
++
++	return ret < 0 ? ret : 0;
++}
++
++#ifdef MAXIM_DUMP
++static void maxim_ov10635_dump_regs(struct i2c_client *client)
++{
++	int ret, i;
++	u8 val;
++	u16 regs[] = {0x300a, 0x300b, 0x300c};
++
++	dev_dbg(&client->dev, "dump regs 0x%x\n", client->addr);
++
++	for (i = 0; i < sizeof(regs) / 2; i++) {
++		ret = maxim_reg16_read(client, regs[i], &val);
++		if (ret < 0)
++			dev_err(&client->dev,
++				"read fail: chip 0x%x register 0x%02x\n",
++				client->addr, regs[i]);
++		printk("0x%02x -> 0x%x\n", regs[i], val);
++	}
++}
++
++static void maxim_max927x_dump_regs(struct i2c_client *client)
++{
++	int ret;
++	u8 reg;
++
++	dev_dbg(&client->dev, "dump regs 0x%x\n", client->addr);
++
++	for (reg = 0; reg < 0x20; reg++) {
++		ret = i2c_smbus_read_byte_data(client, reg);
++		if (ret < 0)
++			dev_err(&client->dev,
++				"read fail: chip 0x%x register 0x%x\n",
++				client->addr, reg);
++		printk("0x%02x ", ret);
++		if (((reg + 1) % 0x10) == 0)
++			printk("\n");
++	}
++}
++#endif /* MAXIM_DUMP */
+diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
+new file mode 100644
+index 0000000..eddf674
+--- /dev/null
++++ b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
+@@ -0,0 +1,167 @@
++/*
++ * MAXIM R-Car H2 Demo board setup driver
++ *
++ * Copyright (C) 2015 Cogent Embedded, Inc.
++ *
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ */
++
++#include <linux/delay.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++
++#include "max9272_ov10635.h"
++
++static int maxim_probe(struct i2c_client *client,
++		       const struct i2c_device_id *did)
++{
++	u8 val;
++	int cam_idx, tmp_addr;
++
++	tmp_addr = client->addr;
++
++	/* power down cascaded MAX9272 chips */
++	client->addr = 0x48;						/* MAX9272-CAM0 I2C */
++	maxim_reg8_write(client, 0x0e, 0x02);				/* GP0 high */
++
++#ifdef MAX9275_PRESENT
++	/*
++	 * SETUP MAX9275 I2C
++	 */
++	dev_info(&client->dev, "SETUP MAX9275 I2C to 0x46<->04e\n");
++
++	client->addr = 0x48;						/* MAX9272-CAM0 I2C */
++	maxim_reg8_write(client, 0x0d, 0x36);				/* disable artificial ACK */
++	maxim_reg8_write(client, 0x04, 0x00);				/* disable reverse_control/serial_link/conf_link - this is to disable access to max9271-CAM0 */
++
++	client->addr = 0x40 + 6;					/* MAX9275 new I2C */
++	maxim_reg8_read(client, 0x1e, &val);				/* read ID and check if we come from reboot or power down */
++	if (val != 0x21) {
++		client->addr = 0x40;					/* MAX9275-CAM0 I2C after poweroff */
++		i2c_smbus_read_byte(client);				/* ping to wake-up */
++		maxim_reg8_write(client, 0x04, 0x00);			/* wake up, disable reverse_control/serial_link/conf_link */
++
++		/* make sure that it is a MAX9275 */
++		maxim_reg8_read(client, 0x1e, &val);			/* read ID */
++		if (val == 0x21) {
++			maxim_reg8_write(client, 0x13, 0x36);		/* disable artificial ACK */
++			maxim_reg8_write(client, 0x04, 0x00);		/* disable reverse_control/serial_link/conf_link */
++			maxim_reg8_write(client, 0x01, (0x48 + 6) << 1); /* set MAX9276 I2C pair to 0x48+6 */
++			maxim_reg8_write(client, 0x00, (0x40 + 6) << 1); /* set MAX9275 I2C to 0x40+6 */
++		}
++	}
++#endif
++
++	for (cam_idx = 0; cam_idx < MAXIM_NUM; cam_idx++) {
++		/*
++		 * SETUP CAMx (MAX9272/MAX9271/OV10635) I2C
++		 */
++		dev_info(&client->dev, "SETUP CAM%d (MAX9272/MAX9271/OV10635) I2C: 0x%x<->0x%x<->0x%x\n", cam_idx,
++				       maxim_map[0][cam_idx], maxim_map[1][cam_idx], maxim_map[2][cam_idx]);
++
++		/* Reverse channel setup */
++		client->addr = 0x48;					/* MAX9272-CAMx I2C */
++		maxim_reg8_write(client, 0x04, 0x43);			/* enable reverse_control/conf_link */
++		maxim_reg8_write(client, 0x0d, 0xb6);			/* enable artificial ACKs - this is to wake up MAX9271-CAMx */
++		maxim_reg8_write(client, 0x15, 0x17);			/* reverse channel pulse length 200ns, amplitude 100mV */
++		mdelay(2);						/* wait 2ms after any change of reverse channel settings */
++
++		client->addr = 0x40;					/* MAX9271-CAMx I2C */
++		i2c_smbus_read_byte(client);				/* ping to wake-up */
++		maxim_reg8_write(client, 0x04, 0x43);			/* wake-up, enable reverse_control/conf_link */
++		mdelay(5);						/* wait 5ms for conf_link to establish */
++		maxim_reg8_write(client, 0x08, 0x1);			/* reverse channel receiver high threshold enable */
++		mdelay(2);						/* wait 2ms after any change of reverse channel settings */
++
++		client->addr = 0x48;					/* MAX9272-CAMx I2C */
++		maxim_reg8_write(client, 0x15, 0x1f);			/* reverse channel increase amplitude 160mV to compensate high threshold enabled */
++		mdelay(2);						/* wait 2ms after any change of reverse channel settings */
++
++		/* GMSL setup */
++		client->addr = 0x40;					/* MAX9272-CAMx I2C */
++		maxim_reg8_write(client, 0x0d, 0x36);			/* disable artificial ACK */
++		maxim_reg8_write(client, 0x07, 0x94);			/* RAW/YUV, PCLK rising edge, HS/VS encoding enabled */
++
++		client->addr = 0x48;					/* MAX9272-CAMx I2C */
++		maxim_reg8_write(client, 0x0d, 0x36);			/* disable artificial ACK */
++		maxim_reg8_write(client, 0x07, 0x84);			/* RAW/YUV, 24-bit, PCLK rising edge, HS/VS encoding enabled */
++		mdelay(2);						/* wait 2ms */
++
++#if 1
++		/* I2C translator setup */
++		client->addr = 0x40;					/* MAX9271-CAMx I2C */
++		maxim_reg8_write(client, 0x09, maxim_map[2][cam_idx] << 1); /* OV10635 I2C new */
++		maxim_reg8_write(client, 0x0A, 0x30 << 1);		/* OV10635 I2C */
++		maxim_reg8_write(client, 0x0B, 0x45 << 1);		/* broadcast I2C */
++		maxim_reg8_write(client, 0x0C, maxim_map[1][cam_idx] << 1); /* MAX9271-CAMx I2C new */
++#else
++		client->addr = 0x30;					/* OV10635-CAM0 I2C */
++		maxim_reg16_write(client, 0x300C, (maxim_map[2][cam_idx] << 1) | 0x1); /* OV10635 new */
++#endif
++
++		/* I2C addresses change */
++		client->addr = 0x40;					/* MAX9271-CAMx I2C */
++		maxim_reg8_write(client, 0x01, maxim_map[0][cam_idx] << 1); /* MAX9272-CAM0 I2C new */
++		maxim_reg8_write(client, 0x00, maxim_map[1][cam_idx] << 1); /* MAX9271-CAM0 I2C new */
++
++		client->addr = 0x48;					/* MAX9272-CAM0 I2C */
++		maxim_reg8_write(client, 0x00, maxim_map[1][cam_idx] << 1); /* MAX9272-CAMx I2C new */
++		maxim_reg8_write(client, 0x01, maxim_map[0][cam_idx] << 1); /* MAX9271-CAMx I2C new */
++
++#ifdef MAXIM_DUMP
++		client->addr = maxim_map[0][cam_idx];			/* MAX9272-CAMx I2C new */
++		maxim_max927x_dump_regs(client);
++		client->addr = maxim_map[1][cam_idx];			/* MAX9271-CAMx I2C new */
++		maxim_max927x_dump_regs(client);
++		client->addr = maxim_map[2][cam_idx];			/* OV10635-CAMx I2C */
++		maxim_ov10635_dump_regs(client);
++#endif
++
++		/* Reverse channel disable */
++		client->addr = maxim_map[0][cam_idx];			/* MAX9272-CAMx I2C new */
++		maxim_reg8_write(client, 0x04, 0x00);			/* disable reverse control/serial_link/conf_link */
++		/* Enable cascaded MAX9272 */
++		maxim_reg8_write(client, 0x0e, 0x00);			/* GP0 low */
++	}
++
++	/* NOTE: I2C addr tmp_addr will be occupied as UU */
++	client->addr = tmp_addr;
++
++	return 0;
++}
++
++static int maxim_remove(struct i2c_client *client)
++{
++	return 0;
++}
++
++static const struct of_device_id maxim_dt_ids[] = {
++	{ .compatible = "maxim,max9272-ov10635-setup" },
++	{},
++};
++MODULE_DEVICE_TABLE(of, maxim_dt_ids);
++
++static const struct i2c_device_id maxim_id[] = {
++	{ "maxim_setup", 0 },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, maxim_id);
++
++static struct i2c_driver maxim_i2c_driver = {
++	.driver	= {
++		.name		= "maxim_setup",
++		.of_match_table	= of_match_ptr(maxim_dt_ids),
++	},
++	.probe		= maxim_probe,
++	.remove		= maxim_remove,
++	.id_table	= maxim_id,
++};
++
++module_i2c_driver(maxim_i2c_driver);
++
++MODULE_DESCRIPTION("Setup driver for 4 SoC Cameras MAX9272<->MAX9271<->OV10635");
++MODULE_AUTHOR("Vladimir Barinov");
++MODULE_LICENSE("GPL");
+diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_wizard.h b/drivers/media/i2c/soc_camera/max9272_ov10635_wizard.h
+new file mode 100644
+index 0000000..3ddc5cb
+--- /dev/null
++++ b/drivers/media/i2c/soc_camera/max9272_ov10635_wizard.h
+@@ -0,0 +1,296 @@
++/*
++ * OmniVision ov10635 sensor camera wizard
++ *
++ * Copyright (C) 2015 Cogent Embedded, Inc.
++ *
++ * This program is free software; you can redistribute  it and/or modify it
++ * under  the terms of  the GNU General  Public License as published by the
++ * Free Software Foundation;  either version 2 of the  License, or (at your
++ * option) any later version.
++ */
++
++//#define OV10635_DISPLAY_PATTERN
 +
 +struct ov10635_reg {
 +	u16	reg;
 +	u8	val;
 +};
 +
-+struct ov10635_priv {
-+	struct v4l2_subdev	subdev;
-+	int			xvclk;
-+	int			fps_numerator;
-+	int			fps_denominator;
-+	const struct ov10635_color_format	*cfmt;
-+	int			width;
-+	int			height;
-+};
-+
 +static const struct ov10635_reg ov10635_regs_default[] = {
-+	/*{ 0x0103, 0x01 },*/ { 0x301b, 0xff }, { 0x301c, 0xff }, { 0x301a, 0xff },
++	/* reset */
++//	{ 0x0103, 0x01 },
++
++	/* main PLL setup: PCLK=24MHz/(pre_div *2)*(pll_mult)/sclk_div=24Mhz/2*25/4=75Mhz */
++	{ 0x3003, 0x19 }, // pll_mult[5:0] = reg
++	{ 0x3004, 0x21 }, // pre_div[6:4] = reg[/1,/1.5,/2,/3,/4,/5,/6,/7], sclk_div[2:0] = 2*(1+reg)
++	{ 0x3024, 0x01 }, // switch to main pll
++	/* secondary PLL setup */
++	{ 0x3005, 0x20 },
++	{ 0x3006, 0x91 },
++
++	/* disable pads during setup */
++	{ 0x3000, 0x0f}, // DATA[9:8] IO to input
++	{ 0x3001, 0xff}, // DATA[7:0] IO to input
++	{ 0x3002, 0xff}, // PCLK/H/V IO to input
++	{ 0x300e, 0xff}, // DATA[9:8] to ouput low
++	{ 0x300f, 0xff}, // DARA[7:0] to ouput low
++	{ 0x3010, (u8)~BIT(5)}, // PCLK - function, V/H to output low
++
++	/* disable ISP */
++	{ 0x5000, 0x00 },
++
++	/* other setup */
++	{ 0x301b, 0xff }, { 0x301c, 0xff }, { 0x301a, 0xff },
 +	{ 0x3011, 0x02 }, /* drive strength reduced to x1 */
 +	{ 0x6900, 0x0c }, { 0x6901, 0x11 }, { 0x3503, 0x10 }, { 0x3025, 0x03 },
-+	{ 0x3005, 0x20 }, { 0x3006, 0x91 }, { 0x3600, 0x74 }, { 0x3601, 0x2b },
++	{ 0x3600, 0x74 }, { 0x3601, 0x2b },
 +	{ 0x3612, 0x00 }, { 0x3611, 0x67 }, { 0x3633, 0xca }, { 0x3602, 0x2f },
 +	{ 0x3603, 0x00 }, { 0x3630, 0x28 }, { 0x3631, 0x16 }, { 0x3714, 0x10 },
-+	{ 0x371d, 0x01 }, { 0x4300, 0x38 }, { 0x3007, 0x01 }, { 0x3024, 0x01 },
++	{ 0x371d, 0x01 }, { 0x4300, 0x38 }, { 0x3007, 0x01 },
 +	{ 0x3020, 0x0b }, { 0x3702, 0x0d }, { 0x3703, 0x20 }, { 0x3704, 0x15 },
 +	{ 0x3709, 0xa8 }, { 0x370c, 0xc7 }, { 0x370d, 0x80 }, { 0x3712, 0x00 },
 +	{ 0x3713, 0x20 }, { 0x3715, 0x04 }, { 0x381d, 0x40 }, { 0x381c, 0x00 },
@@ -368,1135 +1342,6 @@ index 0000000..8db0df9
 +	{ 0x3042, 0xf0 }, { 0x3042, 0xf0 }, { 0x301b, 0xf0 }, { 0x301c, 0xf0 },
 +	{ 0x301a, 0xf0 },
 +};
-+
-+static const struct ov10635_color_format ov10635_cfmts[] = {
-+	{
-+		.code		= V4L2_MBUS_FMT_YUYV8_2X8,
-+		.colorspace	= V4L2_COLORSPACE_SMPTE170M,
-+	}, {
-+		.code		= V4L2_MBUS_FMT_YUYV10_2X10,
-+		.colorspace	= V4L2_COLORSPACE_SMPTE170M,
-+	},
-+};
-+
-+static struct ov10635_priv *to_ov10635(const struct i2c_client *client)
-+{
-+	return container_of(i2c_get_clientdata(client), struct ov10635_priv,
-+			    subdev);
-+}
-+
-+static int ov10635_reg_read(struct i2c_client *client, u16 reg, u8 *val)
-+{
-+	int ret;
-+	u8 data[2] = { reg >> 8, reg & 0xff };
-+	struct i2c_msg msg = {
-+		.addr	= client->addr,
-+		.flags	= 0,
-+		.len	= 2,
-+		.buf	= data,
-+	};
-+
-+	ret = i2c_transfer(client->adapter, &msg, 1);
-+	if (ret < 0)
-+		goto err;
-+
-+	msg.flags = I2C_M_RD;
-+	msg.len	= 1;
-+	msg.buf	= data,
-+	ret = i2c_transfer(client->adapter, &msg, 1);
-+	if (ret < 0)
-+		goto err;
-+
-+	*val = data[0];
-+	return 0;
-+
-+err:
-+	dev_err(&client->dev, "Failed reading register 0x%04x!\n", reg);
-+	return ret;
-+}
-+
-+static int ov10635_reg_write(struct i2c_client *client, u16 reg, u8 val)
-+{
-+	int ret;
-+	u8 data[3] = { reg >> 8, reg & 0xff, val };
-+
-+	struct i2c_msg msg = {
-+		.addr	= client->addr,
-+		.flags	= 0,
-+		.len	= 3,
-+		.buf	= data,
-+	};
-+
-+	ret = i2c_transfer(client->adapter, &msg, 1);
-+	if (ret < 0) {
-+		dev_err(&client->dev, "Failed writing register 0x%04x!\n", reg);
-+		return ret;
-+	}
-+
-+	return 0;
-+}
-+
-+static int ov10635_reg_write16(struct i2c_client *client, u16 reg, u16 val)
-+{
-+	int ret;
-+
-+	ret = ov10635_reg_write(client, reg, val >> 8);
-+	if (ret)
-+		return ret;
-+
-+	ret = ov10635_reg_write(client, reg + 1, val & 0xff);
-+	if (ret)
-+		return ret;
-+
-+	return 0;
-+}
-+
-+/* Read a register, alter its bits, write it back */
-+static int ov10635_reg_rmw(struct i2c_client *client, u16 reg, u8 set, u8 unset)
-+{
-+	u8 val;
-+	int ret;
-+
-+	ret = ov10635_reg_read(client, reg, &val);
-+	if (ret) {
-+		dev_err(&client->dev,
-+			"[Read]-Modify-Write of register %04x failed!\n", reg);
-+		return ret;
-+	}
-+
-+	val |= set;
-+	val &= ~unset;
-+
-+	ret = ov10635_reg_write(client, reg, val);
-+	if (ret)
-+		dev_err(&client->dev,
-+			"Read-Modify-[Write] of register %04x failed!\n", reg);
-+
-+	return ret;
-+}
-+
-+static int ov10635_set_regs(struct i2c_client *client,
-+	const struct ov10635_reg *regs, int nr_regs)
-+{
-+	int i, ret;
-+
-+	for (i = 0; i < nr_regs; i++) {
-+		ret = ov10635_reg_write(client, regs[i].reg, regs[i].val);
-+#if 0 /* Do not report error on write fail .... */
-+		if (ret)
-+			return ret;
-+#endif
-+	}
-+
-+	return 0;
-+}
-+
-+static int ov10635_s_stream(struct v4l2_subdev *sd, int enable)
-+{
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	int cam_idx = client->addr - 0x31;
-+	int tmp_addr;
-+
-+	ov10635_reg_write(client, 0x0100, enable);
-+
-+	tmp_addr = client->addr;
-+	if (enable) {
-+		client->addr = maxim_map[1][cam_idx];	/* MAX9271-CAM0 I2C new */
-+		maxim_reg8_write(client, 0x04, 0x83);	/* wake-up, enable reverse_control/serial_link (video operation) */
-+
-+		client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAM0 I2C new */
-+		maxim_reg8_write(client, 0x04, 0x83);	/* wake-up, enable reverse_control/serial_link (video operation) */
-+	} else {
-+		client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAM0 I2C new */
-+		maxim_reg8_write(client, 0x04, 0x43);	/* wake-up, enable reverse_control/conf_link (i2c operation) */
-+
-+		client->addr = maxim_map[1][cam_idx];	/* MAX9271-CAM0 I2C new */
-+		maxim_reg8_write(client, 0x04, 0x43);	/* wake-up, enable reverse_control/conf_link (i2c operation) */
-+	}
-+	client->addr = tmp_addr;
-+
-+	return 0;
-+}
-+
-+/*
-+ * Get the best pixel clock (pclk) that meets minimum hts/vts requirements.
-+ * xvclk => pre-divider => clk1 => multiplier => clk2 => post-divider => pclk
-+ * We try all valid combinations of settings for the 3 blocks to get the pixel
-+ * clock, and from that calculate the actual hts/vts to use. The vts is
-+ * extended so as to achieve the required frame rate. The function also returns
-+ * the PLL register contents needed to set the pixel clock.
-+ */
-+static int ov10635_get_pclk(int xvclk, int *htsmin, int *vtsmin,
-+			    int fps_numerator, int fps_denominator,
-+			    u8 *r3003, u8 *r3004)
-+{
-+	int pre_divs[] = { 2, 3, 4, 6, 8, 10, 12, 14 };
-+	int pclk;
-+	int best_pclk = INT_MAX;
-+	int best_hts = 0;
-+	int i, j, k;
-+	int best_i = 0, best_j = 0, best_k = 0;
-+	int clk1, clk2;
-+	int hts;
-+
-+	/* Pre-div, reg 0x3004, bits 6:4 */
-+	for (i = 0; i < ARRAY_SIZE(pre_divs); i++) {
-+		clk1 = (xvclk / pre_divs[i]) * 2;
-+
-+		if ((clk1 < 3000000) || (clk1 > 27000000))
-+			continue;
-+
-+		/* Mult = reg 0x3003, bits 5:0 */
-+		for (j = 1; j < 32; j++) {
-+			clk2 = (clk1 * j);
-+
-+			if ((clk2 < 200000000) || (clk2 > 500000000))
-+				continue;
-+
-+			/* Post-div, reg 0x3004, bits 2:0 */
-+			for (k = 0; k < 8; k++) {
-+				pclk = clk2 / (2*(k+1));
-+
-+				if (pclk > 96000000)
-+					continue;
-+
-+				hts = *htsmin + 200 + pclk/300000;
-+
-+				/* 2 clock cycles for every YUV422 pixel */
-+				if (pclk < (((hts * *vtsmin)/fps_denominator)
-+					* fps_numerator * 2))
-+					continue;
-+
-+				if (pclk < best_pclk) {
-+					best_pclk = pclk;
-+					best_hts = hts;
-+					best_i = i;
-+					best_j = j;
-+					best_k = k;
-+				}
-+			}
-+		}
-+	}
-+
-+	/* register contents */
-+	*r3003 = (u8)best_j;
-+	*r3004 = ((u8)best_i << 4) | (u8)best_k;
-+
-+	/* Did we get a valid PCLK? */
-+	if (best_pclk == INT_MAX)
-+		return -1;
-+
-+	*htsmin = best_hts;
-+
-+	/* Adjust vts to get as close to the desired frame rate as we can */
-+	*vtsmin = best_pclk / ((best_hts/fps_denominator) * fps_numerator * 2);
-+
-+	return best_pclk;
-+}
-+
-+/* Setup registers according to resolution and color encoding */
-+static int ov10635_set_params(struct i2c_client *client, u32 *width,
-+			      u32 *height,
-+			      enum v4l2_mbus_pixelcode code)
-+{
-+	struct ov10635_priv *priv = to_ov10635(client);
-+	int ret = -EINVAL;
-+	int pclk;
-+	int hts, vts;
-+	u8 r3003, r3004;
-+	int tmp;
-+	u32 height_pre_subsample;
-+	u32 width_pre_subsample;
-+	u8 horiz_crop_mode;
-+	int i;
-+	int nr_isp_pixels;
-+	int vert_sub_sample = 0;
-+	int horiz_sub_sample = 0;
-+	int sensor_width;
-+
-+	if ((*width > OV10635_MAX_WIDTH) || (*height > OV10635_MAX_HEIGHT))
-+		return ret;
-+
-+	/* select format */
-+	priv->cfmt = NULL;
-+	for (i = 0; i < ARRAY_SIZE(ov10635_cfmts); i++) {
-+		if (code == ov10635_cfmts[i].code) {
-+			priv->cfmt = ov10635_cfmts + i;
-+			break;
-+		}
-+	}
-+	if (!priv->cfmt)
-+		goto ov10635_set_fmt_error;
-+
-+	priv->width = *width;
-+	priv->height = *height;
-+
-+	/* Vertical sub-sampling? */
-+	height_pre_subsample = priv->height;
-+	if (priv->height <= 400) {
-+		vert_sub_sample = 1;
-+		height_pre_subsample <<= 1;
-+	}
-+
-+	/* Horizontal sub-sampling? */
-+	width_pre_subsample = priv->width;
-+	if (priv->width <= 640) {
-+		horiz_sub_sample = 1;
-+		width_pre_subsample <<= 1;
-+	}
-+
-+	/* Horizontal cropping */
-+	if (width_pre_subsample > 768) {
-+		sensor_width = OV10635_SENSOR_WIDTH;
-+		horiz_crop_mode = 0x63;
-+	} else if (width_pre_subsample > 656) {
-+		sensor_width = 768;
-+		horiz_crop_mode = 0x6b;
-+	} else {
-+		sensor_width = 656;
-+		horiz_crop_mode = 0x73;
-+	}
-+
-+	/* minimum values for hts and vts */
-+	hts = sensor_width;
-+	vts = height_pre_subsample + 50;
-+	dev_dbg(&client->dev, "fps=(%d/%d), hts=%d, vts=%d\n",
-+		priv->fps_numerator, priv->fps_denominator, hts, vts);
-+
-+	/* Get the best PCLK & adjust hts,vts accordingly */
-+	pclk = ov10635_get_pclk(priv->xvclk, &hts, &vts, priv->fps_numerator,
-+				priv->fps_denominator, &r3003, &r3004);
-+	if (pclk < 0)
-+		return ret;
-+	dev_dbg(&client->dev, "pclk=%d, hts=%d, vts=%d\n", pclk, hts, vts);
-+	dev_dbg(&client->dev, "r3003=0x%X r3004=0x%X\n", r3003, r3004);
-+
-+	/* Disable ISP & program all registers that we might modify */
-+	ret = ov10635_set_regs(client, ov10635_regs_change_mode,
-+		ARRAY_SIZE(ov10635_regs_change_mode));
-+	if (ret)
-+		return ret;
-+
-+	/* Set PLL */
-+	ret = ov10635_reg_write(client, 0x3003, r3003);
-+	if (ret)
-+		return ret;
-+	ret = ov10635_reg_write(client, 0x3004, r3004);
-+	if (ret)
-+		return ret;
-+
-+	/* Set format to UYVY */
-+	ret = ov10635_reg_write(client, 0x4300, 0x3a);
-+	if (ret)
-+		return ret;
-+
-+	if (priv->cfmt->code == V4L2_MBUS_FMT_YUYV8_2X8) {
-+		/* Set mode to 8-bit BT.656 */
-+		ret = ov10635_set_regs(client, ov10635_regs_bt656,
-+			ARRAY_SIZE(ov10635_regs_bt656));
-+		if (ret)
-+			return ret;
-+
-+		/* Set output to 8-bit yuv */
-+		ret = ov10635_reg_write(client, 0x4605, 0x08);
-+		if (ret)
-+			return ret;
-+	} else {
-+		/* V4L2_MBUS_FMT_YUYV10_2X10 */
-+		/* Set mode to 10-bit BT.656 */
-+		ret = ov10635_set_regs(client, ov10635_regs_bt656_10bit,
-+			ARRAY_SIZE(ov10635_regs_bt656_10bit));
-+		if (ret)
-+			return ret;
-+
-+		/* Set output to 10-bit yuv */
-+		ret = ov10635_reg_write(client, 0x4605, 0x00);
-+		if (ret)
-+			return ret;
-+	}
-+
-+	/* Horizontal cropping */
-+	ret = ov10635_reg_write(client, 0x3621, horiz_crop_mode);
-+	if (ret)
-+		return ret;
-+
-+	ret = ov10635_reg_write(client, 0x3702, (pclk+1500000)/3000000);
-+	if (ret)
-+		return ret;
-+	ret = ov10635_reg_write(client, 0x3703, (pclk+666666)/1333333);
-+	if (ret)
-+		return ret;
-+	ret = ov10635_reg_write(client, 0x3704, (pclk+961500)/1923000);
-+	if (ret)
-+		return ret;
-+
-+	/* Vertical cropping */
-+	tmp = ((OV10635_SENSOR_HEIGHT - height_pre_subsample) / 2) & ~0x1;
-+	ret = ov10635_reg_write16(client, 0x3802, tmp);
-+	if (ret)
-+		return ret;
-+	tmp = tmp + height_pre_subsample + 3;
-+	ret = ov10635_reg_write16(client, 0x3806, tmp);
-+	if (ret)
-+		return ret;
-+
-+	/* Output size */
-+	ret = ov10635_reg_write16(client, 0x3808, priv->width);
-+	if (ret)
-+		return ret;
-+	ret = ov10635_reg_write16(client, 0x380a, priv->height);
-+	if (ret)
-+		return ret;
-+
-+	ret = ov10635_reg_write16(client, 0x380c, hts);
-+	if (ret)
-+		return ret;
-+
-+	ret = ov10635_reg_write16(client, 0x380e, vts);
-+	if (ret)
-+		return ret;
-+
-+	if (vert_sub_sample) {
-+		ret = ov10635_reg_rmw(client, OV10635_VFLIP,
-+					OV10635_VFLIP_SUBSAMPLE, 0);
-+		if (ret)
-+			return ret;
-+
-+		ret = ov10635_set_regs(client, ov10635_regs_vert_sub_sample,
-+			ARRAY_SIZE(ov10635_regs_vert_sub_sample));
-+		if (ret)
-+			return ret;
-+	}
-+
-+	ret = ov10635_reg_write16(client, 0x4606, 2*hts);
-+	if (ret)
-+		return ret;
-+	ret = ov10635_reg_write16(client, 0x460a, 2*(hts-width_pre_subsample));
-+	if (ret)
-+		return ret;
-+
-+	tmp = (vts - 8) * 16;
-+	ret = ov10635_reg_write16(client, 0xc488, tmp);
-+	if (ret)
-+		return ret;
-+	ret = ov10635_reg_write16(client, 0xc48a, tmp);
-+	if (ret)
-+		return ret;
-+
-+	nr_isp_pixels = sensor_width * (priv->height + 4);
-+	ret = ov10635_reg_write16(client, 0xc4cc, nr_isp_pixels/256);
-+	if (ret)
-+		return ret;
-+	ret = ov10635_reg_write16(client, 0xc4ce, nr_isp_pixels/256);
-+	if (ret)
-+		return ret;
-+	ret = ov10635_reg_write16(client, 0xc512, nr_isp_pixels/16);
-+	if (ret)
-+		return ret;
-+
-+	/* Horizontal sub-sampling */
-+	if (horiz_sub_sample) {
-+		ret = ov10635_reg_write(client, 0x5005, 0x9);
-+		if (ret)
-+			return ret;
-+
-+		ret = ov10635_reg_write(client, 0x3007, 0x2);
-+		if (ret)
-+			return ret;
-+	}
-+
-+	ret = ov10635_reg_write16(client, 0xc518, vts);
-+	if (ret)
-+		return ret;
-+	ret = ov10635_reg_write16(client, 0xc51a, hts);
-+	if (ret)
-+		return ret;
-+
-+	/* Enable ISP blocks */
-+	ret = ov10635_set_regs(client, ov10635_regs_enable,
-+		ARRAY_SIZE(ov10635_regs_enable));
-+	if (ret)
-+		return ret;
-+
-+	/* Wait for settings to take effect */
-+	mdelay(300);
-+
-+	if (priv->cfmt->code == V4L2_MBUS_FMT_YUYV8_2X8)
-+		dev_dbg(&client->dev, "Using 8-bit BT.656\n");
-+	else
-+		dev_dbg(&client->dev, "Using 10-bit BT.656\n");
-+
-+	return 0;
-+
-+ov10635_set_fmt_error:
-+	dev_err(&client->dev, "Unsupported settings (%dx%d@(%d/%d)fps)\n",
-+		*width, *height, priv->fps_numerator, priv->fps_denominator);
-+	priv = NULL;
-+
-+	return ret;
-+}
-+
-+static int ov10635_g_fmt(struct v4l2_subdev *sd,
-+			struct v4l2_mbus_framefmt *mf)
-+{
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	struct ov10635_priv *priv = to_ov10635(client);
-+	u32 width = OV10635_MAX_WIDTH, height = OV10635_MAX_HEIGHT;
-+	enum v4l2_mbus_pixelcode code;
-+	int ret;
-+
-+	if (priv->cfmt)
-+		code = priv->cfmt->code;
-+	else
-+#ifdef OV10635_10BIT_DEFAULT
-+		code = V4L2_MBUS_FMT_YUYV10_2X10;
-+#else
-+		code = V4L2_MBUS_FMT_YUYV8_2X8;
-+#endif
-+
-+	ret = ov10635_set_params(client, &width, &height, code);
-+	if (ret < 0)
-+		return ret;
-+
-+	mf->width	= priv->width;
-+	mf->height	= priv->height;
-+	mf->code	= priv->cfmt->code;
-+	mf->colorspace	= priv->cfmt->colorspace;
-+	mf->field	= V4L2_FIELD_NONE;
-+
-+	return 0;
-+}
-+
-+/* set the format we will capture in */
-+static int ov10635_s_fmt(struct v4l2_subdev *sd,
-+			struct v4l2_mbus_framefmt *mf)
-+{
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	struct ov10635_priv *priv = to_ov10635(client);
-+	int ret;
-+
-+	ret = ov10635_set_params(client, &mf->width, &mf->height,
-+				    mf->code);
-+	if (!ret)
-+		mf->colorspace = priv->cfmt->colorspace;
-+
-+	return ret;
-+}
-+
-+static int ov10635_try_fmt(struct v4l2_subdev *sd,
-+			  struct v4l2_mbus_framefmt *mf)
-+{
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	struct ov10635_priv *priv = to_ov10635(client);
-+	int i;
-+
-+	/* Note: All sizes are good */
-+	mf->field = V4L2_FIELD_NONE;
-+
-+	for (i = 0; i < ARRAY_SIZE(ov10635_cfmts); i++)
-+		if (mf->code == ov10635_cfmts[i].code) {
-+			mf->colorspace	= ov10635_cfmts[i].colorspace;
-+			break;
-+		}
-+
-+	if (i == ARRAY_SIZE(ov10635_cfmts)) {
-+		/* Unsupported format requested. Propose either */
-+		if (priv->cfmt) {
-+			/* the current one or */
-+			mf->colorspace = priv->cfmt->colorspace;
-+			mf->code = priv->cfmt->code;
-+		} else {
-+			/* the default one */
-+			mf->colorspace = ov10635_cfmts[0].colorspace;
-+			mf->code = ov10635_cfmts[0].code;
-+		}
-+	}
-+
-+	return 0;
-+}
-+
-+static int ov10635_enum_fmt(struct v4l2_subdev *sd, unsigned int index,
-+			   enum v4l2_mbus_pixelcode *code)
-+{
-+	if (index >= ARRAY_SIZE(ov10635_cfmts))
-+		return -EINVAL;
-+
-+	*code = ov10635_cfmts[index].code;
-+
-+	return 0;
-+}
-+
-+static int ov10635_g_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *parms)
-+{
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	struct ov10635_priv *priv = to_ov10635(client);
-+	struct v4l2_captureparm *cp = &parms->parm.capture;
-+
-+	if (parms->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-+		return -EINVAL;
-+
-+	memset(cp, 0, sizeof(struct v4l2_captureparm));
-+	cp->capability = V4L2_CAP_TIMEPERFRAME;
-+	cp->timeperframe.denominator = priv->fps_numerator;
-+	cp->timeperframe.numerator = priv->fps_denominator;
-+
-+	return 0;
-+}
-+
-+static int ov10635_s_parm(struct v4l2_subdev *sd, struct v4l2_streamparm *parms)
-+{
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	struct ov10635_priv *priv = to_ov10635(client);
-+	struct v4l2_captureparm *cp = &parms->parm.capture;
-+	enum v4l2_mbus_pixelcode code;
-+	int ret;
-+
-+	if (parms->type != V4L2_BUF_TYPE_VIDEO_CAPTURE)
-+		return -EINVAL;
-+	if (cp->extendedmode != 0)
-+		return -EINVAL;
-+
-+	/* FIXME Check we can handle the requested framerate */
-+	priv->fps_denominator = cp->timeperframe.numerator;
-+	priv->fps_numerator = cp->timeperframe.denominator;
-+
-+	if (priv->cfmt)
-+		code = priv->cfmt->code;
-+	else
-+		code = V4L2_MBUS_FMT_YUYV8_2X8;
-+
-+	ret = ov10635_set_params(client, &priv->width, &priv->height, code);
-+	if (ret < 0)
-+		return ret;
-+
-+	return 0;
-+}
-+
-+static int ov10635_s_crop(struct v4l2_subdev *sd, const struct v4l2_crop *a)
-+{
-+	struct v4l2_crop a_writable = *a;
-+	struct v4l2_rect *rect = &a_writable.c;
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	struct ov10635_priv *priv = to_ov10635(client);
-+	int ret = -EINVAL;
-+	enum v4l2_mbus_pixelcode code;
-+
-+	if (priv->cfmt)
-+		code = priv->cfmt->code;
-+	else
-+		code = V4L2_MBUS_FMT_YUYV8_2X8;
-+
-+	ret = ov10635_set_params(client, &rect->width, &rect->height, code);
-+	if (!ret)
-+		return -EINVAL;
-+
-+	rect->width = priv->width;
-+	rect->height = priv->height;
-+	rect->left = 0;
-+	rect->top = 0;
-+
-+	return ret;
-+}
-+
-+static int ov10635_g_crop(struct v4l2_subdev *sd, struct v4l2_crop *a)
-+{
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	struct ov10635_priv *priv = to_ov10635(client);
-+
-+	if (priv) {
-+		a->c.width = priv->width;
-+		a->c.height = priv->height;
-+	} else {
-+		a->c.width = OV10635_MAX_WIDTH;
-+		a->c.height = OV10635_MAX_HEIGHT;
-+	}
-+
-+	a->c.left = 0;
-+	a->c.top = 0;
-+	a->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-+
-+	return 0;
-+}
-+
-+static int ov10635_cropcap(struct v4l2_subdev *sd, struct v4l2_cropcap *a)
-+{
-+	a->bounds.left = 0;
-+	a->bounds.top = 0;
-+	a->bounds.width = OV10635_MAX_WIDTH;
-+	a->bounds.height = OV10635_MAX_HEIGHT;
-+	a->defrect = a->bounds;
-+	a->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-+	a->pixelaspect.numerator = 1;
-+	a->pixelaspect.denominator = 1;
-+
-+	return 0;
-+}
-+
-+static int ov10635_video_probe(struct i2c_client *client)
-+{
-+	u8 pid, ver;
-+	int ret;
-+
-+	/* check and show product ID and manufacturer ID */
-+	ret = ov10635_reg_read(client, OV10635_PID, &pid);
-+	if (ret)
-+		return ret;
-+	ret = ov10635_reg_read(client, OV10635_VER, &ver);
-+	if (ret)
-+		return ret;
-+
-+	if (OV10635_VERSION(pid, ver) != OV10635_VERSION_REG) {
-+		dev_err(&client->dev, "Product ID error %x:%x\n", pid, ver);
-+		return -ENODEV;
-+	}
-+
-+	dev_info(&client->dev, "ov10635 Product ID %x Manufacturer ID %x\n",
-+		 pid, ver);
-+
-+	/* Program all the 'standard' registers */
-+	ret = ov10635_set_regs(client, ov10635_regs_default,
-+		ARRAY_SIZE(ov10635_regs_default));
-+	if (ret)
-+		return ret;
-+
-+	return 0;
-+}
-+
-+/* Request bus settings on camera side */
-+static int ov10635_g_mbus_config(struct v4l2_subdev *sd,
-+				 struct v4l2_mbus_config *cfg)
-+{
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	struct soc_camera_subdev_desc *ssdd = soc_camera_i2c_to_desc(client);
-+
-+	cfg->flags = V4L2_MBUS_PCLK_SAMPLE_RISING | V4L2_MBUS_MASTER |
-+		V4L2_MBUS_DATA_ACTIVE_HIGH;
-+	cfg->type = V4L2_MBUS_BT656;
-+	cfg->flags = soc_camera_apply_board_flags(ssdd, cfg);
-+
-+	return 0;
-+}
-+
-+static struct v4l2_subdev_core_ops ov10635_core_ops = {
-+#ifdef CONFIG_VIDEO_ADV_DEBUG
-+	.g_register = max9272_ov10635_g_register,
-+	.s_register = max9272_ov10635_s_register,
-+#endif
-+};
-+
-+static struct v4l2_subdev_video_ops ov10635_video_ops = {
-+	.s_stream	= ov10635_s_stream,
-+	.g_mbus_fmt	= ov10635_g_fmt,
-+	.s_mbus_fmt	= ov10635_s_fmt,
-+	.try_mbus_fmt	= ov10635_try_fmt,
-+	.enum_mbus_fmt	= ov10635_enum_fmt,
-+	.cropcap	= ov10635_cropcap,
-+	.g_crop		= ov10635_g_crop,
-+	.s_crop		= ov10635_s_crop,
-+	.g_parm		= ov10635_g_parm,
-+	.s_parm		= ov10635_s_parm,
-+	.g_mbus_config	= ov10635_g_mbus_config,
-+};
-+
-+static struct v4l2_subdev_ops ov10635_subdev_ops = {
-+	.core	= &ov10635_core_ops,
-+	.video	= &ov10635_video_ops,
-+};
-+
-+static int ov10635_probe(struct i2c_client *client,
-+			 const struct i2c_device_id *did)
-+{
-+	struct ov10635_priv *priv;
-+	struct soc_camera_subdev_desc *ssdd = soc_camera_i2c_to_desc(client);
-+	int ret;
-+
-+	if (!ssdd) {
-+		dev_err(&client->dev, "Missing platform_data for driver\n");
-+		return -EINVAL;
-+	}
-+
-+	priv = devm_kzalloc(&client->dev, sizeof(*priv), GFP_KERNEL);
-+	if (!priv)
-+		return -ENOMEM;
-+
-+	/* TODO External XVCLK is board specific */
-+	priv->xvclk = 25000000;
-+
-+	priv->fps_numerator = 25;
-+	priv->fps_denominator = 1;
-+
-+	v4l2_i2c_subdev_init(&priv->subdev, client, &ov10635_subdev_ops);
-+
-+	ret = ov10635_video_probe(client);
-+
-+	return ret;
-+}
-+
-+static int ov10635_remove(struct i2c_client *client)
-+{
-+	struct ov10635_priv *priv = i2c_get_clientdata(client);
-+
-+	v4l2_device_unregister_subdev(&priv->subdev);
-+
-+	return 0;
-+}
-+
-+static const struct i2c_device_id ov10635_id[] = {
-+	{ "max9272-ov10635", 0 },
-+	{ }
-+};
-+MODULE_DEVICE_TABLE(i2c, ov10635_id);
-+
-+static struct i2c_driver ov10635_i2c_driver = {
-+	.driver	= {
-+		.name	= "max9272-ov10635",
-+	},
-+	.probe		= ov10635_probe,
-+	.remove		= ov10635_remove,
-+	.id_table	= ov10635_id,
-+};
-+
-+module_i2c_driver(ov10635_i2c_driver);
-+
-+MODULE_DESCRIPTION("SoC Camera driver for MAX9272<->MAX9271<->OV10635");
-+MODULE_AUTHOR("Vladimir Barinov");
-+MODULE_LICENSE("GPL");
-diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635.h b/drivers/media/i2c/soc_camera/max9272_ov10635.h
-new file mode 100644
-index 0000000..0d5d4d7
---- /dev/null
-+++ b/drivers/media/i2c/soc_camera/max9272_ov10635.h
-@@ -0,0 +1,186 @@
-+/*
-+ * MAXIM R-Car H2 Demo board setup include file
-+ *
-+ * Copyright (C) 2015 Cogent Embedded, Inc.
-+ *
-+ * This program is free software; you can redistribute  it and/or modify it
-+ * under  the terms of  the GNU General  Public License as published by the
-+ * Free Software Foundation;  either version 2 of the  License, or (at your
-+ * option) any later version.
-+ */
-+
-+//#define DEBUG
-+#ifdef DEBUG
-+//#define WRITE_VERIFY
-+#define MAXIM_DUMP
-+#undef dev_dbg
-+#define dev_dbg dev_info
-+#endif
-+
-+#define MAX9275_PRESENT			/* MAX9275 presents on I2C bus */
-+#define MAXIM_NUM		4	/* number of cameras */
-+#define MAXIM_NUM_RETRIES	10	/* number of read/write retries */
-+
-+/*
-+ * I2C MAP.
-+ *
-+ * MAX9275	0x40+6	- serializer
-+ * MAX9276	0x48+6	- deserializer
-+ *
-+ * 		CAM0	CAM1	CAM2	CAM3
-+ * MAX9272	0x48+1	0x48+2	0x48+3	0x48+4	- deserializer
-+ * MAX9271	0x40+1	0x40+2	0x40+3	0x40+4	- serializer
-+ * OV10635	0x30+1	0x30+2	0x30+3	0x30+4	- sensor
-+ */
-+
-+static u8 maxim_map[][MAXIM_NUM] = {
-+	{ 0x48 + 1, 0x48 + 2, 0x48 + 3, 0x48 + 4 },
-+	{ 0x40 + 1, 0x40 + 2, 0x40 + 3, 0x40 + 4 },
-+	{ 0x30 + 1, 0x30 + 2, 0x30 + 3, 0x30 + 4 },
-+};
-+
-+static int maxim_reg8_read(struct i2c_client *client, u8 reg, u8 *val)
-+{
-+	int ret;
-+	int retries = MAXIM_NUM_RETRIES;
-+
-+	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
-+		ret = i2c_smbus_read_byte_data(client, reg);
-+		if (!(ret < 0))
-+			break;
-+	}
-+
-+	if (ret < 0) {
-+		dev_err(&client->dev,
-+			"read fail: chip 0x%x register 0x%x\n", client->addr,
-+								reg);
-+	} else {
-+		*val = ret;
-+	}
-+
-+	return ret;
-+}
-+
-+static int maxim_reg8_write(struct i2c_client *client, u8 reg, u8 val)
-+{
-+	int ret;
-+	int retries = MAXIM_NUM_RETRIES;
-+
-+	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
-+		ret = i2c_smbus_write_byte_data(client, reg, val);
-+		if (!(ret < 0))
-+			break;
-+	}
-+
-+	if (ret < 0) {
-+		dev_err(&client->dev,
-+			"write fail: chip 0x%x register 0x%x\n", client->addr,
-+								 reg);
-+	} else {
-+#ifdef WRITE_VERIFY
-+		u8 val2;
-+		maxim_reg8_read(client, reg, &val2);
-+		if (val != val2)
-+			dev_err(&client->dev,
-+				"write verify mismatch: chip 0x%x reg=0x%x "
-+				"0x%x->0x%x\n", client->addr, reg, val, val2);
-+#endif
-+	}
-+
-+	return ret;
-+}
-+
-+static int maxim_reg16_read(struct i2c_client *client, u16 reg, u8 *val)
-+{
-+	int ret;
-+	int retries = MAXIM_NUM_RETRIES;
-+	u8 buf[2] = {reg >> 8, reg & 0xff};
-+
-+	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
-+		ret = i2c_master_send(client, buf, 2);
-+		if (ret == 2) {
-+			ret = i2c_master_recv(client, buf, 1);
-+			if (ret == 1)
-+				break;
-+		}
-+	}
-+
-+	if (ret < 0) {
-+		dev_err(&client->dev,
-+			"read fail: chip 0x%x register 0x%x\n", client->addr,
-+								reg);
-+	} else {
-+		*val = buf[0];
-+	}
-+
-+	return ret;
-+}
-+
-+static int maxim_reg16_write(struct i2c_client *client, u16 reg, u8 val)
-+{
-+	int ret;
-+	int retries = MAXIM_NUM_RETRIES;
-+	u8 buf[3] = {reg >> 8, reg & 0xff, val};
-+
-+	for (retries = MAXIM_NUM_RETRIES; retries; retries--) {
-+		ret = i2c_master_send(client, buf, 3);
-+		if (ret == 3)
-+			break;
-+	}
-+
-+	if (ret < 0) {
-+		dev_err(&client->dev,
-+			"write fail: chip 0x%x register 0x%x\n", client->addr,
-+								 reg);
-+	} else {
-+#ifdef WRITE_VERIFY
-+		u8 val2;
-+		maxim_reg16_read(client, reg, &val2);
-+		if (val != val2)
-+			dev_err(&client->dev,
-+				"write verify mismatch: chip 0x%x reg=0x%x "
-+				"0x%x->0x%x\n", client->addr, reg, val, val2);
-+#endif
-+	}
-+
-+	return ret;
-+}
-+
-+#ifdef MAXIM_DUMP
-+static void maxim_ov10635_dump_regs(struct i2c_client *client)
-+{
-+	int ret, i;
-+	u8 val;
-+	u16 regs[] = {0x300a, 0x300b, 0x300c};
-+
-+	dev_dbg(&client->dev, "dump regs 0x%x\n", client->addr);
-+
-+	for (i = 0; i < sizeof(regs) / 2; i++) {
-+		ret = maxim_reg16_read(client, regs[i], &val);
-+		if (ret < 0)
-+			dev_err(&client->dev,
-+				"read fail: chip 0x%x register 0x%02x\n",
-+				client->addr, regs[i]);
-+		printk("0x%02x -> 0x%x\n", regs[i], val);
-+	}
-+}
-+
-+static void maxim_max927x_dump_regs(struct i2c_client *client)
-+{
-+	int ret;
-+	u8 reg;
-+
-+	dev_dbg(&client->dev, "dump regs 0x%x\n", client->addr);
-+
-+	for (reg = 0; reg < 0x20; reg++) {
-+		ret = i2c_smbus_read_byte_data(client, reg);
-+		if (ret < 0)
-+			dev_err(&client->dev,
-+				"read fail: chip 0x%x register 0x%x\n",
-+				client->addr, reg);
-+		printk("0x%02x ", ret);
-+		if (((reg + 1) % 0x10) == 0)
-+			printk("\n");
-+	}
-+}
-+#endif /* MAXIM_DUMP */
-diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
-new file mode 100644
-index 0000000..4238c15
---- /dev/null
-+++ b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
-@@ -0,0 +1,138 @@
-+/*
-+ * MAXIM R-Car H2 Demo board setup driver
-+ *
-+ * Copyright (C) 2015 Cogent Embedded, Inc.
-+ *
-+ * This program is free software; you can redistribute  it and/or modify it
-+ * under  the terms of  the GNU General  Public License as published by the
-+ * Free Software Foundation;  either version 2 of the  License, or (at your
-+ * option) any later version.
-+ */
-+
-+#include <linux/delay.h>
-+#include <linux/i2c.h>
-+#include <linux/module.h>
-+
-+#include "max9272_ov10635.h"
-+
-+static int maxim_probe(struct i2c_client *client,
-+		       const struct i2c_device_id *did)
-+{
-+	u8 val;
-+	int cam_idx, tmp_addr;
-+
-+	tmp_addr = client->addr;
-+
-+#ifdef MAX9275_PRESENT
-+	/*
-+	 * SETUP MAX9275 I2C
-+	 */
-+	dev_dbg(&client->dev, "SETUP MAX9275 I2C to 0x45<->04d\n");
-+
-+	client->addr = 0x48;						/* MAX9272-CAM0 I2C */
-+	maxim_reg8_write(client, 0x0d, 0x36);				/* disable artificial ACK */
-+	maxim_reg8_write(client, 0x04, 0x00);				/* disable reverse_control/serial_link/conf_link - this is to disable access to max9271-CAM0 */
-+
-+	client->addr = 0x40 + 6;					/* MAX9275 new I2C after reboot */
-+	maxim_reg8_read(client, 0x1e, &val);				/* read ID */
-+	if (val != 0x21) {
-+		client->addr = 0x40;					/* MAX9275-CAM0 I2C after poweroff */
-+		i2c_smbus_read_byte(client);				/* ping to wake-up */
-+		maxim_reg8_write(client, 0x04, 0x00);			/* wake up, disable reverse_control/serial_link/conf_link */
-+
-+		/* make sure that it is a MAX9275 */
-+		maxim_reg8_read(client, 0x1e, &val);			/* read ID */
-+		if (val == 0x21) {
-+			maxim_reg8_write(client, 0x13, 0x36);		/* disable artificial ACK */
-+			maxim_reg8_write(client, 0x01, (0x48 + 6) << 1); /* set MAX9276 I2C pair to 0x48+6 */
-+			maxim_reg8_write(client, 0x00, (0x40 + 6) << 1); /* set MAX9275 I2C to 0x40+6 */
-+
-+//			client->addr = 0x40 + 6;			/* MAX9275 I2C new */
-+//			maxim_reg8_write(client, 0x04, 0x10);		/* put to sleep, disable reverse_control/serial_link/conf_link */
-+		}
-+	}
-+#endif
-+
-+	for (cam_idx = 0; cam_idx < MAXIM_NUM; cam_idx++) {
-+		/*
-+		 * SETUP CAMx (MAX9272/MAX9271/OV10635) I2C
-+		 */
-+		dev_dbg(&client->dev, "SETUP CAM%d (MAX9272/MAX9271/OV10635) I2C: 0x%x<->0x%x<->0x%x\n", cam_idx,
-+				      maxim_map[0][cam_idx], maxim_map[1][cam_idx], maxim_map[2][cam_idx]);
-+
-+		client->addr = 0x48;					/* MAX9272-CAM0 I2C */
-+		maxim_reg8_write(client, 0x04, 0x43);			/* enable reverse_control/conf_link */
-+		maxim_reg8_write(client, 0x0d, 0xb6);			/* enable artificial ACKs - this is to wake up MAX9271-CAM0 */
-+
-+		client->addr = 0x40;					/* MAX9271-CAM0 I2C */
-+		i2c_smbus_read_byte(client);				/* ping to wake-up */
-+		maxim_reg8_write(client, 0x04, 0x43);			/* wake-up, enable reverse_control/conf_link */
-+//		maxim_reg8_write(client, 0x09, maxim_map[2][cam_idx] << 1); /* i2c translator source A */
-+//		maxim_reg8_write(client, 0x0A, maxim_map[2][cam_idx] << 1); /* i2c translator destination A */
-+		maxim_reg8_write(client, 0x00, maxim_map[1][cam_idx] << 1); /* MAX9271-CAM0 I2C new */
-+		mdelay(5);						/* delay required change address to take effect */
-+
-+		client->addr = maxim_map[1][cam_idx];			/* MAX9271-CAM0 I2C new */
-+		maxim_reg8_write(client, 0x01, maxim_map[0][cam_idx] << 1); /* pair MAX9272-CAM0 I2C new */
-+		maxim_reg8_write(client, 0x0d, 0x36);			/* disable artificial ACK */
-+
-+		client->addr = 0x48;					/* MAX9272-CAM0 I2C */
-+		maxim_reg8_write(client, 0x0d, 0x36);			/* disable artificial ACK */
-+		maxim_reg8_write(client, 0x00, maxim_map[1][cam_idx] << 1); /* MAX9272-CAM0 I2C new */
-+		maxim_reg8_write(client, 0x01, maxim_map[0][cam_idx] << 1); /* pair MAX9271-CAM0 I2C new */
-+//		mdelay(5);						/* delay required change address to take effect */
-+
-+		client->addr = 0x30;					/* OV10635-CAM0 I2C */
-+		maxim_reg16_write(client, 0x300C, (maxim_map[2][cam_idx] << 1) | 0x1); /* OV10635 new */
-+
-+		client->addr = maxim_map[0][cam_idx];			/* MAX9272-CAM0 I2C new */
-+		maxim_reg8_write(client, 0x0e, 0x78);			/* GP0 enable */
-+
-+#ifdef MAXIM_DUMP
-+		client->addr = maxim_map[0][cam_idx];			/* MAX9272-CAM0 I2C new */
-+		maxim_max927x_dump_regs(client);
-+		client->addr = maxim_map[1][cam_idx];			/* MAX9271-CAM0 I2C new */
-+		maxim_max927x_dump_regs(client);
-+		client->addr = maxim_map[2][cam_idx];			/* OV10635-CAM0 I2C */
-+		maxim_ov10635_dump_regs(client);
-+#endif
-+	}
-+
-+	/* NOTE: I2C addr tmp_addr will be occupied as UU */
-+	client->addr = tmp_addr;
-+
-+	return 0;
-+}
-+
-+static int maxim_remove(struct i2c_client *client)
-+{
-+	return 0;
-+}
-+
-+static const struct of_device_id maxim_dt_ids[] = {
-+	{ .compatible = "maxim,max9272-ov10635-setup" },
-+	{},
-+};
-+MODULE_DEVICE_TABLE(of, maxim_dt_ids);
-+
-+static const struct i2c_device_id maxim_id[] = {
-+	{ "maxim_setup", 0 },
-+	{ }
-+};
-+MODULE_DEVICE_TABLE(i2c, maxim_id);
-+
-+static struct i2c_driver maxim_i2c_driver = {
-+	.driver	= {
-+		.name		= "maxim_setup",
-+		.of_match_table	= of_match_ptr(maxim_dt_ids),
-+	},
-+	.probe		= maxim_probe,
-+	.remove		= maxim_remove,
-+	.id_table	= maxim_id,
-+};
-+
-+module_i2c_driver(maxim_i2c_driver);
-+
-+MODULE_DESCRIPTION("Setup driver for 4 SoC Cameras MAX9272<->MAX9271<->OV10635");
-+MODULE_AUTHOR("Vladimir Barinov");
-+MODULE_LICENSE("GPL");
 -- 
 1.9.1
 
