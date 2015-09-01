@@ -50,6 +50,7 @@ SRC_URI_append_lcb = " \
     file://0023-ARM-shmobile-r8a7791-Add-JPU-clock-dt-and-CPG-define.patch \
     file://0024-ARM-shmobile-r8a7790-Add-JPU-device-node.patch \
     file://0025-ARM-shmobile-r8a7791-Add-JPU-device-node.patch \
+    file://0026-tty-serial-sh-sci-fix-kernel-oops.patch \
     file://stout/01-da9063_rtc/0001-rtc-da9063-RTC-driver.patch \
     file://stout/02-da9063_mfd/0001-mfd-da9063-Add-IRQ-support.patch \
     file://stout/02-da9063_mfd/0002-mfd-dialog-Constify-struct-mfd_cell-where-possible.patch \
