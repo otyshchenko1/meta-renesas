@@ -1045,7 +1045,7 @@ new file mode 100644
 index 0000000..3ddc5cb
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635_wizard.h
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,298 @@
 +/*
 + * OmniVision ov10635 sensor camera wizard
 + *
@@ -1086,6 +1086,8 @@ index 0000000..3ddc5cb
 +
 +	/* disable ISP */
 +	{ 0x5000, 0x00 },
++
++	{ 0x4708, 0x00 }, // PCLK polarity: rising edge
 +
 +	/* other setup */
 +	{ 0x301b, 0xff }, { 0x301c, 0xff }, { 0x301a, 0xff },
