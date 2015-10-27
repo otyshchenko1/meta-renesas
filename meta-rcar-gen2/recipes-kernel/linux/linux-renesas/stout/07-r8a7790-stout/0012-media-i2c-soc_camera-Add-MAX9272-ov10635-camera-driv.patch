@@ -9,13 +9,13 @@ Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
 ---
  drivers/media/i2c/soc_camera/Kconfig               |   7 +
  drivers/media/i2c/soc_camera/Makefile              |   1 +
- drivers/media/i2c/soc_camera/max9272_ov10635.c     | 300 +++++++
+ drivers/media/i2c/soc_camera/max9272_ov10635.c     | 320 +++++++
  drivers/media/i2c/soc_camera/max9272_ov10635.h     | 228 +++++
- .../media/i2c/soc_camera/max9272_ov10635_setup.c   | 173 ++++
+ .../media/i2c/soc_camera/max9272_ov10635_setup.c   | 194 +++++
  .../media/i2c/soc_camera/max9272_ov10635_wizard.h  | 358 ++++++++
  .../soc_camera/max9272_ov10635_wizard_1280x800.h   | 941 +++++++++++++++++++++
  .../soc_camera/max9272_ov10635_wizard_debug_fps.h  | 291 +++++++
- 8 files changed, 2299 insertions(+)
+ 8 files changed, 2340 insertions(+)
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.c
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.h
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
@@ -54,10 +54,10 @@ index f3d3403..d1b00b5 100644
  obj-$(CONFIG_SOC_CAMERA_TW9910)		+= tw9910.o
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635.c b/drivers/media/i2c/soc_camera/max9272_ov10635.c
 new file mode 100644
-index 0000000..f8c2b85
+index 0000000..475278c
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635.c
-@@ -0,0 +1,300 @@
+@@ -0,0 +1,320 @@
 +/*
 + * MAXIM max9272-max9271 with OmniVision ov10635 sensor camera driver
 + *
@@ -131,9 +131,20 @@ index 0000000..f8c2b85
 +	int cam_idx = client->addr - 0x31;
 +	int tmp_addr;
 +
-+	if (enable) {
-+		maxim_reg16_write(client, 0x0100, enable); /* stream on */
++	/* switch to GMSL conf_link to access sensor registers */
++	tmp_addr = client->addr;
++	client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAMx */
++	maxim_reg8_write(client, 0x04, 0x43);	/* enable reverse_control/conf_link */
++	mdelay(5);				/* wait 5ms for conf_link to establish */
++	client->addr = maxim_map[1][cam_idx];	/* MAX9271-CAMx */
++	maxim_reg8_write(client, 0x04, 0x43);	/* enable reverse_control/conf_link */
++	mdelay(5);				/* wait 5ms for conf_link to establish */
++	client->addr = tmp_addr;
 +
++	maxim_reg16_write(client, 0x0100, enable); /* stream on/off */
++
++	if (enable) {
++		/* switch to GMSL serial_link for streaming video */
 +		tmp_addr = client->addr;
 +		client->addr = maxim_map[1][cam_idx];	/* MAX9271-CAMx */
 +		maxim_reg8_write(client, 0x04, 0x83);	/* enable reverse_control/serial_link */
@@ -142,17 +153,6 @@ index 0000000..f8c2b85
 +		maxim_reg8_write(client, 0x04, 0x80);	/* disable reverse_control, enable serial_link */
 +		mdelay(5);				/* wait 2ms after changing reverse_control */
 +		client->addr = tmp_addr;
-+	} else {
-+		tmp_addr = client->addr;
-+		client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAMx */
-+		maxim_reg8_write(client, 0x04, 0x43);	/* enable reverse_control/conf_link */
-+		mdelay(5);				/* wait 5ms for conf_link to establish */
-+		client->addr = maxim_map[1][cam_idx];	/* MAX9271-CAMx */
-+		maxim_reg8_write(client, 0x04, 0x43);	/* enable reverse_control/conf_link */
-+		mdelay(5);				/* wait 5ms for conf_link to establish */
-+		client->addr = tmp_addr;
-+
-+		maxim_reg16_write(client, 0x0100, enable); /* stream off */
 +	}
 +
 +	return 0;
@@ -258,6 +258,7 @@ index 0000000..f8c2b85
 +	int ret;
 +	int tmp_addr, cam_idx;
 +
++	/* enable reverse_control */
 +	tmp_addr = client->addr;
 +	cam_idx = client->addr - 0x31;
 +	client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAMx */
@@ -280,6 +281,18 @@ index 0000000..f8c2b85
 +
 +	dev_info(&client->dev, "ov10635 Product ID %x Manufacturer ID %x\n",
 +		 pid, ver);
++
++#if 0
++	/* IMI camera has GPIO1 routed to OV10635 reset pin */
++	client->addr = maxim_map[1][cam_idx];	/* OV10635-CAMx I2C new */
++	maxim_reg8_write(client, 0x0f, 0xfc);	/* GPIO1 low, ov10635 in reset */
++	mdelay(10);
++	maxim_reg8_write(client, 0x0f, 0xfe);	/* GPIO1 high, ov10635 out from reset */
++#else
++	/* s/w reset sensor */
++	maxim_reg16_write(client, 0x103, 0x1);
++	udelay(100);
++#endif
 +
 +	/* Program wizard registers */
 +	ret = ov10635_set_regs(client, ov10635_regs_wizard,
@@ -318,8 +331,6 @@ index 0000000..f8c2b85
 +	if (ret < 0)
 +		goto cleanup;
 +
-+	v4l_info(client, "chip found @ 0x%02x (%s)\n",
-+		 client->addr, client->adapter->name);
 +	return 0;
 +
 +cleanup:
@@ -338,6 +349,14 @@ index 0000000..f8c2b85
 +	return 0;
 +}
 +
++static void ov10635_shutdown(struct i2c_client *client)
++{
++	struct ov10635_priv *priv = i2c_get_clientdata(client);
++
++	/* make sure stream off during shutdown (reset/reboot) */
++	ov10635_s_stream(&priv->sd, 0);
++}
++
 +static const struct i2c_device_id ov10635_id[] = {
 +	{ "max9272-ov10635", 0 },
 +	{ }
@@ -350,6 +369,7 @@ index 0000000..f8c2b85
 +	},
 +	.probe		= ov10635_probe,
 +	.remove		= ov10635_remove,
++	.shutdown	= ov10635_shutdown,
 +	.id_table	= ov10635_id,
 +};
 +
@@ -594,10 +614,10 @@ index 0000000..1ee9466
 +#endif /* MAXIM_DUMP */
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
 new file mode 100644
-index 0000000..0ce7581
+index 0000000..906f278
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
-@@ -0,0 +1,173 @@
+@@ -0,0 +1,194 @@
 +/*
 + * MAXIM R-Car H2 Demo board setup driver
 + *
@@ -612,12 +632,15 @@ index 0000000..0ce7581
 +#include <linux/delay.h>
 +#include <linux/i2c.h>
 +#include <linux/module.h>
++#include <linux/of_gpio.h>
 +
 +#include "max9272_ov10635.h"
 +
 +static int maxim_probe(struct i2c_client *client,
 +		       const struct i2c_device_id *did)
 +{
++	int err;
++	int pwen;
 +#ifdef MAX9275_PRESENT
 +	u8 val;
 +#endif
@@ -625,6 +648,19 @@ index 0000000..0ce7581
 +
 +	/* uncomment for old IMI cameras that need 8s delay before Sensor access */
 +//	mdelay(8000);
++
++	if (client->dev.of_node) {
++		pwen = of_get_gpio(client->dev.of_node, 0);
++		if (pwen > 0) {
++			err = gpio_request(pwen, dev_name(&client->dev));
++			if (err) {
++				dev_err(&client->dev, "cannot request PWEN gpio %d: %d\n", pwen, err);
++			} else {
++				gpio_direction_output(pwen, 1);
++				mdelay(250);
++			}
++		}
++	}
 +
 +	tmp_addr = client->addr;
 +
@@ -725,6 +761,11 @@ index 0000000..0ce7581
 +		client->addr = maxim_map[2][cam_idx];			/* OV10635-CAMx I2C */
 +		maxim_ov10635_dump_regs(client);
 +#endif
++
++		/* make sure that the conf_link enabled - needed for reset/reboot, due to I2C runtime changeing */
++		client->addr = maxim_map[1][cam_idx];			/* MAX9271-CAMx I2C new */
++		maxim_reg8_write(client, 0x04, 0x43);			/* wake-up, enable reverse_control/conf_link */
++		mdelay(5);						/* wait 5ms for conf_link to establish */
 +
 +		/* Reverse channel disable */
 +		client->addr = maxim_map[0][cam_idx];			/* MAX9272-CAMx I2C new */
@@ -1137,7 +1178,7 @@ index 0000000..b798339
 +};
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_1280x800.h b/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_1280x800.h
 new file mode 100644
-index 0000000..1c92973
+index 0000000..62f0c61
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_1280x800.h
 @@ -0,0 +1,941 @@
@@ -1158,7 +1199,7 @@ index 0000000..1c92973
 +};
 +
 +static const struct ov10635_reg ov10635_regs_wizard[] = {
-+{0x0103, 0x01},
++//{0x0103, 0x01},
 +{0x300C, 0x61},
 +{0x300C, 0x61},
 +{0x300C, 0x61},
