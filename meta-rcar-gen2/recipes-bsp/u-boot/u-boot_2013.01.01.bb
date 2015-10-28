@@ -25,4 +25,5 @@ SRC_URI_append_lcb = " \
     file://0008-serial-serial-sh-SCIFA-interface-for-R-Car-Gen2-SoCs.patch \
     file://0009-arm-rmobile-Add-r8a7790-stout-board-support.patch \
     file://0010-Support-R-Car-Gen2-USB-PHY.patch \
+    file://0011-enable-rmobile-usb-phy-on-silk.patch \
 "
