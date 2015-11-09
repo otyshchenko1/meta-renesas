@@ -478,7 +478,7 @@ index 0000000..ba9d741
 +	pinctrl-names = "default";
 +*/
 +
-+	clock-frequency = <400000>;
++	clock-frequency = <100000>;
 +	status = "okay";
 +
 +	maxim_setup@10 {

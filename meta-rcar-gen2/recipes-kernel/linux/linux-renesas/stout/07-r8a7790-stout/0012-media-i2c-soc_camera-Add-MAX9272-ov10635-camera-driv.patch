@@ -10,12 +10,12 @@ Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
  drivers/media/i2c/soc_camera/Kconfig               |   7 +
  drivers/media/i2c/soc_camera/Makefile              |   1 +
  drivers/media/i2c/soc_camera/max9272_ov10635.c     | 320 +++++++
- drivers/media/i2c/soc_camera/max9272_ov10635.h     | 228 +++++
+ drivers/media/i2c/soc_camera/max9272_ov10635.h     | 232 +++++
  .../media/i2c/soc_camera/max9272_ov10635_setup.c   | 194 +++++
  .../media/i2c/soc_camera/max9272_ov10635_wizard.h  | 358 ++++++++
  .../soc_camera/max9272_ov10635_wizard_1280x800.h   | 941 +++++++++++++++++++++
  .../soc_camera/max9272_ov10635_wizard_debug_fps.h  | 291 +++++++
- 8 files changed, 2340 insertions(+)
+ 8 files changed, 2344 insertions(+)
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.c
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.h
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
@@ -380,10 +380,10 @@ index 0000000..475278c
 +MODULE_LICENSE("GPL");
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635.h b/drivers/media/i2c/soc_camera/max9272_ov10635.h
 new file mode 100644
-index 0000000..1ee9466
+index 0000000..fce5313
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635.h
-@@ -0,0 +1,228 @@
+@@ -0,0 +1,232 @@
 +/*
 + * MAXIM R-Car H2 Demo board setup include file
 + *
@@ -406,6 +406,10 @@ index 0000000..1ee9466
 +//#define MAX9275_PRESENT			/* MAX9275 presents on I2C bus */
 +#define MAXIM_NUM		4	/* number of cameras */
 +#define MAXIM_NUM_RETRIES	1	/* number of read/write retries */
++
++#define MAXIM_I2C_I2C_SPEED_400KHZ	(0x5 << 2) /* 339 kbps */
++#define MAXIM_I2C_I2C_SPEED_100KHZ	(0x3 << 2) /* 105 kbps */
++#define MAXIM_I2C_SPEED			MAXIM_I2C_I2C_SPEED_100KHZ
 +
 +/*
 + * I2C MAP.
@@ -614,7 +618,7 @@ index 0000000..1ee9466
 +#endif /* MAXIM_DUMP */
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
 new file mode 100644
-index 0000000..906f278
+index 0000000..7afd71f
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
 @@ -0,0 +1,194 @@
@@ -646,9 +650,6 @@ index 0000000..906f278
 +#endif
 +	int cam_idx, tmp_addr;
 +
-+	/* uncomment for old IMI cameras that need 8s delay before Sensor access */
-+//	mdelay(8000);
-+
 +	if (client->dev.of_node) {
 +		pwen = of_get_gpio(client->dev.of_node, 0);
 +		if (pwen > 0) {
@@ -661,6 +662,9 @@ index 0000000..906f278
 +			}
 +		}
 +	}
++
++	/* uncomment for old IMI cameras that need 8s delay before Sensor access */
++//	mdelay(8000);
 +
 +	tmp_addr = client->addr;
 +
@@ -675,7 +679,7 @@ index 0000000..906f278
 +	dev_info(&client->dev, "SETUP MAX9275 I2C to 0x46<->04e\n");
 +
 +	client->addr = 0x48;						/* MAX9272-CAM0 I2C */
-+	maxim_reg8_write(client, 0x0d, 0x36);				/* disable artificial ACK, I2C speed 339kbps */
++	maxim_reg8_write(client, 0x0d, 0x22 | MAXIM_I2C_SPEED);		/* disable artificial ACK, I2C speed set */
 +	maxim_reg8_write(client, 0x04, 0x00);				/* disable reverse_control/serial_link/conf_link - this is to disable access to max9271-CAM0 */
 +
 +	client->addr = 0x40 + 6;					/* MAX9275 new I2C */
@@ -706,7 +710,7 @@ index 0000000..906f278
 +		/* Reverse channel setup */
 +		client->addr = 0x48;					/* MAX9272-CAMx I2C */
 +		maxim_reg8_write(client, 0x04, 0x43);			/* enable reverse_control/conf_link */
-+		maxim_reg8_write(client, 0x0d, 0xb6);			/* enable artificial ACKs - this is to wake up MAX9271-CAMx, I2C speed 339kbps */
++		maxim_reg8_write(client, 0x0d, 0xa2 | MAXIM_I2C_SPEED);	/* enable artificial ACKs - this is to wake up MAX9271-CAMx, I2C speed set */
 +		maxim_reg8_write(client, 0x15, 0x17);			/* reverse channel pulse length 200ns, amplitude 100mV */
 +		mdelay(2);						/* wait 2ms after any change of reverse channel settings */
 +
@@ -723,11 +727,11 @@ index 0000000..906f278
 +
 +		/* GMSL setup */
 +		client->addr = 0x40;					/* MAX9271-CAMx I2C */
-+		maxim_reg8_write(client, 0x0d, 0x36);			/* disable artificial ACK, I2C speed 339kbps */
++		maxim_reg8_write(client, 0x0d, 0x22 | MAXIM_I2C_SPEED);	/* disable artificial ACK, I2C speed set */
 +		maxim_reg8_write(client, 0x07, 0x94);			/* RAW/YUV, PCLK rising edge, HS/VS encoding enabled */
 +
 +		client->addr = 0x48;					/* MAX9272-CAMx I2C */
-+		maxim_reg8_write(client, 0x0d, 0x36);			/* disable artificial ACK, I2C speed 339kbps */
++		maxim_reg8_write(client, 0x0d, 0x22 | MAXIM_I2C_SPEED);	/* disable artificial ACK, I2C speed set */
 +		maxim_reg8_write(client, 0x07, 0x84);			/* RAW/YUV, 24-bit, PCLK rising edge, HS/VS encoding enabled */
 +		maxim_reg8_write(client, 0x05, 0x7B);			/* boosted current, full hs/vs tracking, equalizer enable, 13dB boost gain */
 +		mdelay(2);						/* wait 2ms */
