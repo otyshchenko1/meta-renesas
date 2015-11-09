@@ -10,12 +10,12 @@ Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
  drivers/media/i2c/soc_camera/Kconfig               |   7 +
  drivers/media/i2c/soc_camera/Makefile              |   1 +
  drivers/media/i2c/soc_camera/max9272_ov10635.c     | 320 +++++++
- drivers/media/i2c/soc_camera/max9272_ov10635.h     | 232 +++++
- .../media/i2c/soc_camera/max9272_ov10635_setup.c   | 194 +++++
+ drivers/media/i2c/soc_camera/max9272_ov10635.h     | 238 ++++++
+ .../media/i2c/soc_camera/max9272_ov10635_setup.c   | 199 +++++
  .../media/i2c/soc_camera/max9272_ov10635_wizard.h  | 358 ++++++++
  .../soc_camera/max9272_ov10635_wizard_1280x800.h   | 941 +++++++++++++++++++++
  .../soc_camera/max9272_ov10635_wizard_debug_fps.h  | 291 +++++++
- 8 files changed, 2344 insertions(+)
+ 8 files changed, 2355 insertions(+)
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.c
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.h
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
@@ -57,7 +57,7 @@ new file mode 100644
 index 0000000..475278c
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635.c
-@@ -0,0 +1,320 @@
+@@ -0,0 +1,322 @@
 +/*
 + * MAXIM max9272-max9271 with OmniVision ov10635 sensor camera driver
 + *
@@ -282,6 +282,7 @@ index 0000000..475278c
 +	dev_info(&client->dev, "ov10635 Product ID %x Manufacturer ID %x\n",
 +		 pid, ver);
 +
++#if !defined(MAXIM_IMI_MCU_POWERED)
 +#if 0
 +	/* IMI camera has GPIO1 routed to OV10635 reset pin */
 +	client->addr = maxim_map[1][cam_idx];	/* OV10635-CAMx I2C new */
@@ -299,6 +300,7 @@ index 0000000..475278c
 +			       ARRAY_SIZE(ov10635_regs_wizard));
 +	if (ret)
 +		return ret;
++#endif
 +
 +#ifdef OV10635_WIZARD_DEBUG_FPS
 +	ret = ov10635_set_params(client);
@@ -380,10 +382,10 @@ index 0000000..475278c
 +MODULE_LICENSE("GPL");
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635.h b/drivers/media/i2c/soc_camera/max9272_ov10635.h
 new file mode 100644
-index 0000000..fce5313
+index 0000000..492c4a4
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635.h
-@@ -0,0 +1,232 @@
+@@ -0,0 +1,241 @@
 +/*
 + * MAXIM R-Car H2 Demo board setup include file
 + *
@@ -403,13 +405,22 @@ index 0000000..fce5313
 +#define dev_dbg dev_info
 +#endif
 +
-+//#define MAX9275_PRESENT			/* MAX9275 presents on I2C bus */
++#define MAX9275_PRESENT			/* MAX9275 presents on I2C bus */
 +#define MAXIM_NUM		4	/* number of cameras */
 +#define MAXIM_NUM_RETRIES	1	/* number of read/write retries */
 +
 +#define MAXIM_I2C_I2C_SPEED_400KHZ	(0x5 << 2) /* 339 kbps */
 +#define MAXIM_I2C_I2C_SPEED_100KHZ	(0x3 << 2) /* 105 kbps */
 +#define MAXIM_I2C_SPEED			MAXIM_I2C_I2C_SPEED_100KHZ
++
++/* MCU powered IMI cameras require delay between power-on and
++ * RCar access to avoid i2c bus conflicts
++ */
++#define MAXIM_IMI_MCU_V0_DELAY	8000	/* delay for powered MCU firmware v0 */
++#define MAXIM_IMI_MCU_V1_DELAY	3000	/* delay for powered MCU firmware v1 */
++#define MAXIM_IMI_MCU_NO_DELAY	0	/* delay for unpowered MCU  */
++#define MAXIM_IMI_MCU_DELAY	MAXIM_IMI_MCU_V0_DELAY
++//#define MAXIM_IMI_MCU_POWERED		/* skip ov10635 setup for IMI powered MCU (only fw later then v1) */
 +
 +/*
 + * I2C MAP.
@@ -618,10 +629,10 @@ index 0000000..fce5313
 +#endif /* MAXIM_DUMP */
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
 new file mode 100644
-index 0000000..7afd71f
+index 0000000..39c8e17
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
-@@ -0,0 +1,194 @@
+@@ -0,0 +1,199 @@
 +/*
 + * MAXIM R-Car H2 Demo board setup driver
 + *
@@ -663,8 +674,13 @@ index 0000000..7afd71f
 +		}
 +	}
 +
-+	/* uncomment for old IMI cameras that need 8s delay before Sensor access */
-+//	mdelay(8000);
++	/*
++	 * Powered MCU IMI cameras need delay between power-on and R-Car access to avoid
++	 * i2c bus conflicts since linux kernel does not support i2c multi-mastering,
++	 * IMI MCU is master and R-Car is also master.
++	 * The i2c bus conflict results in R-Car i2c IP stall.
++	 */
++	mdelay(MAXIM_IMI_MCU_DELAY);
 +
 +	tmp_addr = client->addr;
 +
