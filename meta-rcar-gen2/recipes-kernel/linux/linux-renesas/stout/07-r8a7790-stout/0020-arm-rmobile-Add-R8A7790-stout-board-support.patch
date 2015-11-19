@@ -436,8 +436,8 @@ index 0000000..43054eb
 +			};
 +
 +			vdd_rgmii_io: ldo11 {
-+				regulator-min-microvolt = <3000000>;
-+				regulator-max-microvolt = <3000000>;
++				regulator-min-microvolt = <2650000>;
++				regulator-max-microvolt = <2650000>;
 +				regulator-boot-on;
 +				regulator-always-on;
 +			};

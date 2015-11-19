@@ -680,8 +680,8 @@ index 0000000..8366274
 +			};
 +
 +			vdd_rgmii_io: ldo11 {
-+				regulator-min-microvolt = <3000000>;
-+				regulator-max-microvolt = <3000000>;
++				regulator-min-microvolt = <2650000>;
++				regulator-max-microvolt = <2650000>;
 +				regulator-boot-on;
 +				regulator-always-on;
 +			};
@@ -1497,8 +1497,8 @@ index 0000000..dbfc276
 +
 +static int ksz9031rn_phy_fixup(struct phy_device *dev)
 +{
-+	/* min tx data delay */
-+	mmd_write_reg(dev, 2, 6, 0);
++	/* tx_clk skew +0.30ns, rx_clk skew 0ns */
++	mmd_write_reg(dev, 2, 8, (0x14 << 5) | (0xf << 0));
 +
 +	return 0;
 +}
