@@ -6,6 +6,8 @@ Subject: [PATCH] tty: serial: sh-sci: fix kernel oops
 Fix kernel oops on shutdown/reboot:
 kernel BUG at drivers/tty/serial/sh-sci.c:1565!
 
+comment line 1565 since still unstable...
+
 Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
 ---
  drivers/tty/serial/sh-sci.c | 3 +++
@@ -15,6 +17,15 @@ diff --git a/drivers/tty/serial/sh-sci.c b/drivers/tty/serial/sh-sci.c
 index 2b2e9d4..51eca733 100644
 --- a/drivers/tty/serial/sh-sci.c
 +++ b/drivers/tty/serial/sh-sci.c
+@@ -1565,7 +1565,7 @@ static void work_fn_tx(struct work_struc
+ 		CIRC_CNT_TO_END(xmit->head, xmit->tail, UART_XMIT_SIZE));
+ 	spin_unlock_irq(&port->lock);
+ 
+-	BUG_ON(!sg_dma_len(sg));
++//	BUG_ON(!sg_dma_len(sg));
+ 
+ 	desc = dmaengine_prep_slave_sg(chan,
+ 			sg, s->sg_len_tx, DMA_MEM_TO_DEV,
 @@ -1903,6 +1903,11 @@ static void sci_shutdown(struct uart_port *port)
  	sci_stop_tx(port);
  	spin_unlock_irqrestore(&port->lock, flags);
@@ -29,4 +40,3 @@ index 2b2e9d4..51eca733 100644
  	sci_free_dma(port);
 -- 
 1.9.1
-
