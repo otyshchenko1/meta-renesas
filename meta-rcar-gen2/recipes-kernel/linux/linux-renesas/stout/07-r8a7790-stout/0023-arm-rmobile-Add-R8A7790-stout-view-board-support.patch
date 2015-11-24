@@ -35,7 +35,7 @@ new file mode 100644
 index 0000000..ba9d741
 --- /dev/null
 +++ b/arch/arm/boot/dts/r8a7790-stout-view.dts
-@@ -0,0 +1,578 @@
+@@ -0,0 +1,579 @@
 +/*
 + * Device Tree Source for the R8A7790-stout-view board
 + *
@@ -402,6 +402,7 @@ index 0000000..ba9d741
 +
 +	renesas,no-ether-link;
 +	renesas,phy = <7>;
++	renesas,phy_alt = <3>;
 +	phy-int-gpio = <&gpio2 15 GPIO_ACTIVE_LOW>;
 +	status = "okay";
 +};
