@@ -64,7 +64,6 @@ SRC_URI_append_lcb = " \
     file://sh-sci/0013-serial-sh-sci-Fix-deadlock-caused-by-the-double-spin.patch \
     file://stout/01-da9063_rtc/0001-rtc-da9063-RTC-driver.patch \
     file://stout/02-da9063_mfd/0001-mfd-da9063-Add-IRQ-support.patch \
-    file://stout/02-da9063_mfd/0002-mfd-dialog-Constify-struct-mfd_cell-where-possible.patch \
     file://stout/02-da9063_mfd/0003-mfd-da9063-Add-support-for-production-silicon-varian.patch \
     file://stout/02-da9063_mfd/0004-mfd-da9063-Upgrade-of-register-definitions-to-suppor.patch \
     file://stout/02-da9063_mfd/0005-mfd-da9063-Add-support-for-AD-silicon-variant.patch \
