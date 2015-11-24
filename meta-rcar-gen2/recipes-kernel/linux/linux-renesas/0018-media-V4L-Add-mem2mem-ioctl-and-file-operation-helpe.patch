@@ -58,7 +58,7 @@ index e96497f..7554bf6 100644
  
  	return m2m_ctx;
  err:
-@@ -703,3 +714,118 @@ void v4l2_m2m_buf_queue(struct v4l2_m2m_ctx *m2m_ctx, struct vb2_buffer *vb)
+@@ -703,3 +714,117 @@ void v4l2_m2m_buf_queue(struct v4l2_m2m_ctx *m2m_ctx, struct vb2_buffer *vb)
  }
  EXPORT_SYMBOL_GPL(v4l2_m2m_buf_queue);
  
@@ -176,7 +176,6 @@ index e96497f..7554bf6 100644
 +	return ret;
 +}
 +EXPORT_SYMBOL_GPL(v4l2_m2m_fop_poll);
-+
 diff --git a/include/media/v4l2-fh.h b/include/media/v4l2-fh.h
 index a62ee18..d942f79 100644
 --- a/include/media/v4l2-fh.h
