@@ -1,0 +1,56 @@
+From 5d2351f6b38fdf5190bc0ca416ecf76ab9d27347 Mon Sep 17 00:00:00 2001
+From: Ryuichi Ando <ryuichi.ando.jz@ps.hitachi-solutions.com>
+Date: Tue, 18 Aug 2015 16:46:58 +0900
+Subject: [PATCH 08/13] serial: sh-sci: Fix hang-up in key input during startup
+ with DMA transfer enabled
+
+Change the processing order of start-up and end of SCIF.
+
+ < start-up(sci_startup()) >
+    before: IRQ Start(sci_request_irq()) -> DMA Start(sci_request_dma())
+    After : DMA Start(sci_request_dma()) -> IRQ Start(sci_request_irq())
+
+ < end(sci_shutdown()) >
+    before: DMA End(sci_free_dma()) -> IRQ End(sci_free_irq())
+    After : IRQ End(sci_free_irq()) -> DMA End(sci_free_dma())
+
+Signed-off-by: Ryuichi Ando <ryuichi.ando.jz@ps.hitachi-solutions.com>
+Signed-off-by: Kazuya Mizuguchi <kazuya.mizuguchi.ks@renesas.com>
+---
+ drivers/tty/serial/sh-sci.c | 10 ++++++----
+ 1 file changed, 6 insertions(+), 4 deletions(-)
+
+diff --git a/drivers/tty/serial/sh-sci.c b/drivers/tty/serial/sh-sci.c
+index bae87f3..1463343 100644
+--- a/drivers/tty/serial/sh-sci.c
++++ b/drivers/tty/serial/sh-sci.c
+@@ -1890,11 +1890,13 @@ static int sci_startup(struct uart_port *port)
+ 
+ 	dev_dbg(port->dev, "%s(%d)\n", __func__, port->line);
+ 
++	sci_request_dma(port);
++
+ 	ret = sci_request_irq(s);
+-	if (unlikely(ret < 0))
++	if (unlikely(ret < 0)) {
++		sci_free_dma(port);
+ 		return ret;
+-
+-	sci_request_dma(port);
++	}
+ 
+ 	spin_lock_irqsave(&port->lock, flags);
+ 	sci_start_tx(port);
+@@ -1937,8 +1939,8 @@ static void sci_shutdown(struct uart_port *port)
+ 	sci_drain_tx(port);
+ 	spin_unlock_irqrestore(&port->lock, flags);
+ 
+-	sci_free_dma(port);
+ 	sci_free_irq(s);
++	sci_free_dma(port);
+ }
+ 
+ static unsigned int sci_scbrr_calc(struct sci_port *s, unsigned int bps,
+-- 
+1.9.1
+

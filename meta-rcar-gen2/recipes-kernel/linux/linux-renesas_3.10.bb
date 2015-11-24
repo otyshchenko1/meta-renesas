@@ -41,7 +41,6 @@ SRC_URI_append_lcb = " \
     file://0014-ARM-shmobile-defconfig-Enable-SCI-DMA-support.patch \
     file://0015-ARM-shmobile-defconfig-Enable-Bluetooth.patch \
     file://0016-ARM-shmobile-defconfig-Add-ATAG-DTB-compatibility.patch \
-    file://0017-tty-serial-sh-sci-protect-SCSCR-register-access.patch \
     file://0018-media-V4L-Add-mem2mem-ioctl-and-file-operation-helpe.patch \
     file://0019-V4L2-platform-Add-Renesas-R-Car-JPEG-codec-driver.patch \
     file://0020-devicetree-bindings-Document-Renesas-R-Car-JPEG-Proc.patch \
@@ -50,9 +49,19 @@ SRC_URI_append_lcb = " \
     file://0023-ARM-shmobile-r8a7791-Add-JPU-clock-dt-and-CPG-define.patch \
     file://0024-ARM-shmobile-r8a7790-Add-JPU-device-node.patch \
     file://0025-ARM-shmobile-r8a7791-Add-JPU-device-node.patch \
-    file://0026-tty-serial-sh-sci-fix-kernel-oops.patch \
-    file://0027-serial-sh-sci-Don-t-call-sci_rx_interrupt-on-error-w.patch \
-    file://0028-serial-sh-sci-Don-t-kick-tx-in-sci_er_interrupt-when.patch \
+    file://sh-sci/0001-serial-sh-sci-Fix-the-problem-that-stops-console-s-o.patch \
+    file://sh-sci/0002-serial-sh-sci-Fix-kernel-panic-after-closing-driver.patch \
+    file://sh-sci/0003-serial-sh-sci-Fix-race-condition-of-SCSCR-register-a.patch \
+    file://sh-sci/0004-serial-sh-sci-Fix-repeats-of-previous-printed-messag.patch \
+    file://sh-sci/0005-serial-sh-sci-Fix-hang-up-in-rebooting-with-DMA-tran.patch \
+    file://sh-sci/0006-serial-sh-sci-Fix-illegal-use-of-disable_irq_nosync-.patch \
+    file://sh-sci/0007-serial-sh-sci-Don-t-kick-tx-in-sci_er_interrupt-when.patch \
+    file://sh-sci/0008-serial-sh-sci-Fix-hang-up-in-key-input-during-startu.patch \
+    file://sh-sci/0009-serial-sh-sci-Fix-deadlock-caused-by-serial-output-r.patch \
+    file://sh-sci/0010-serial-sh-sci-Fix-unlocked-access-to-SCSCR-register.patch \
+    file://sh-sci/0011-serial-sh-sci-Add-lock-to-prevent-the-SCSCR-register.patch \
+    file://sh-sci/0012-serial-sh-sci-Fix-compile-warning-in-sci_flush_buffe.patch \
+    file://sh-sci/0013-serial-sh-sci-Fix-deadlock-caused-by-the-double-spin.patch \
     file://stout/01-da9063_rtc/0001-rtc-da9063-RTC-driver.patch \
     file://stout/02-da9063_mfd/0001-mfd-da9063-Add-IRQ-support.patch \
     file://stout/02-da9063_mfd/0002-mfd-dialog-Constify-struct-mfd_cell-where-possible.patch \
