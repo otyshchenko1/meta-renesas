@@ -1,0 +1,32 @@
+From 0344d0d69b3360ec551581c141c6599a0dcb5f27 Mon Sep 17 00:00:00 2001
+From: Olliver Schinagl <oliver@schinagl.nl>
+Date: Mon, 26 Oct 2015 22:32:36 +0100
+Subject: [PATCH] pwm: sysfs: Remove unnecessary temporary variable
+
+Use the result of pwm_is_enabled() directly instead of storing it in a
+temporary variable.
+
+Signed-off-by: Olliver Schinagl <oliver@schinagl.nl>
+Signed-off-by: Thierry Reding <thierry.reding@gmail.com>
+---
+ drivers/pwm/sysfs.c | 3 +--
+ 1 file changed, 1 insertion(+), 2 deletions(-)
+
+diff --git a/drivers/pwm/sysfs.c b/drivers/pwm/sysfs.c
+index c472772..ba67845 100644
+--- a/drivers/pwm/sysfs.c
++++ b/drivers/pwm/sysfs.c
+@@ -97,9 +97,8 @@ static ssize_t pwm_enable_show(struct device *child,
+ 			       char *buf)
+ {
+ 	const struct pwm_device *pwm = child_to_pwm_device(child);
+-	int enabled = pwm_is_enabled(pwm);
+ 
+-	return sprintf(buf, "%d\n", enabled);
++	return sprintf(buf, "%d\n", pwm_is_enabled(pwm));
+ }
+ 
+ static ssize_t pwm_enable_store(struct device *child,
+-- 
+1.9.1
+

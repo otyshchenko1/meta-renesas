@@ -119,6 +119,17 @@ SRC_URI_append_lcb = " \
     file://stout/07-r8a7790-stout/0020-arm-rmobile-Add-R8A7790-stout-board-support.patch \
     file://stout/07-r8a7790-stout/0022-arm-rmobile-Add-R8A7790-stout-full-board-support.patch \
     file://stout/07-r8a7790-stout/0023-arm-rmobile-Add-R8A7790-stout-view-board-support.patch \
+    file://pwm/0001-pwm-Add-pwm_get_polarity-helper-function.patch \
+    file://pwm/0002-pwm-Add-sysfs-interface.patch \
+    file://pwm/0003-pwm-Add-the-pwm_is_enabled-helper.patch \
+    file://pwm/0004-pwm-Make-use-of-pwm_get_xxx-helpers-where-appropriat.patch \
+    file://pwm/0005-pwm-sysfs-Properly-convert-from-enum-to-string.patch \
+    file://pwm/0006-pwm-sysfs-Remove-unnecessary-temporary-variable.patch \
+    file://pwm/0007-pwm-Add-support-for-R-Car-PWM-Timer.patch \
+    file://pwm/0008-pwm-Add-device-tree-binding-document-for-R-Car-PWM-T.patch \
+    file://pwm/0009-pwm-pwm-rcar-Revise-the-device-tree-binding-document.patch \
+    file://pwm/0010-pinctrl-sh-pfc-r8a7790-Add-PWM-pin-groups-and-functi.patch \
+    file://pwm/0011-ARM-shmobile-r8a7790-add-PWM-DT-support.patch \
 "
 
 SRC_URI_append_porter = " file://porter.cfg"

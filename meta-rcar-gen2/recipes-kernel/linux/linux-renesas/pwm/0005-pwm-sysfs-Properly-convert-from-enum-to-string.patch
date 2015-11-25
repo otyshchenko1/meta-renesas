@@ -1,0 +1,44 @@
+From 5a063d87e97df28ca0b00807bc4d6fa11c5a5107 Mon Sep 17 00:00:00 2001
+From: Thierry Reding <thierry.reding@gmail.com>
+Date: Mon, 20 Jul 2015 09:56:05 +0200
+Subject: [PATCH] pwm: sysfs: Properly convert from enum to string
+
+The current code will check for polarity in a boolean way. While it is
+correct that polarity is either normal or inversed, make it more obvious
+that it's an enumeration by using a switch statement and explicit
+matches on the enumeration values.
+
+Signed-off-by: Thierry Reding <thierry.reding@gmail.com>
+---
+ drivers/pwm/sysfs.c | 14 ++++++++++++--
+ 1 file changed, 12 insertions(+), 2 deletions(-)
+
+diff --git a/drivers/pwm/sysfs.c b/drivers/pwm/sysfs.c
+index ac0abec..fbfc9e9 100644
+--- a/drivers/pwm/sysfs.c
++++ b/drivers/pwm/sysfs.c
+@@ -133,9 +133,19 @@ static ssize_t pwm_polarity_show(struct device *child,
+ 				 char *buf)
+ {
+ 	const struct pwm_device *pwm = child_to_pwm_device(child);
++	const char *polarity = "unknown";
+ 
+-	return sprintf(buf, "%s\n",
+-		       pwm_get_polarity(pwm) ? "inversed" : "normal");
++	switch (pwm_get_polarity(pwm)) {
++	case PWM_POLARITY_NORMAL:
++		polarity = "normal";
++		break;
++
++	case PWM_POLARITY_INVERSED:
++		polarity = "inversed";
++		break;
++	}
++
++	return sprintf(buf, "%s\n", polarity);
+ }
+ 
+ static ssize_t pwm_polarity_store(struct device *child,
+-- 
+1.9.1
+

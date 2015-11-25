@@ -1,0 +1,80 @@
+From 90ba018af3f1d383894f6195334aa28c1c619679 Mon Sep 17 00:00:00 2001
+From: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
+Date: Wed, 25 Nov 2015 18:18:56 +0300
+Subject: [PATCH] ARM: shmobile: r8a7790: add PWM DT support
+
+Define the generic R8A7790 parts of the PWM device nodes.
+
+Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
+---
+ arch/arm/boot/dts/r8a7790.dtsi | 56 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 56 insertions(+)
+
+diff --git a/arch/arm/boot/dts/r8a7790.dtsi b/arch/arm/boot/dts/r8a7790.dtsi
+index 883f134..361d064 100644
+--- a/arch/arm/boot/dts/r8a7790.dtsi
++++ b/arch/arm/boot/dts/r8a7790.dtsi
+@@ -1421,4 +1421,60 @@
+ 			ssi9: ssi@9 { interrupts = <0 379 IRQ_TYPE_LEVEL_HIGH>; };
+ 		};
+ 	};
++
++	pwm0: pwm@e6e30000 {
++		compatible = "renesas,pwm-r8a7790", "renesas,pwm-rcar";
++		reg = <0 0xe6e30000 0 0x8>;
++		#pwm-cells = <2>;
++		clocks = <&mstp5_clks R8A7790_CLK_PWM>;
++		status = "disabled";
++	};
++
++	pwm1: pwm@e6e31000 {
++		compatible = "renesas,pwm-r8a7790", "renesas,pwm-rcar";
++		reg = <0 0xe6e31000 0 0x8>;
++		#pwm-cells = <2>;
++		clocks = <&mstp5_clks R8A7790_CLK_PWM>;
++		status = "disabled";
++	};
++
++	pwm2: pwm@e6e32000 {
++		compatible = "renesas,pwm-r8a7790", "renesas,pwm-rcar";
++		reg = <0 0xe6e32000 0 0x8>;
++		#pwm-cells = <2>;
++		clocks = <&mstp5_clks R8A7790_CLK_PWM>;
++		status = "disabled";
++	};
++
++	pwm3: pwm@e6e33000 {
++		compatible = "renesas,pwm-r8a7790", "renesas,pwm-rcar";
++		reg = <0 0xe6e33000 0 0x8>;
++		#pwm-cells = <2>;
++		clocks = <&mstp5_clks R8A7790_CLK_PWM>;
++		status = "disabled";
++	};
++
++	pwm4: pwm@e6e34000 {
++		compatible = "renesas,pwm-r8a7790", "renesas,pwm-rcar";
++		reg = <0 0xe6e34000 0 0x8>;
++		#pwm-cells = <2>;
++		clocks = <&mstp5_clks R8A7790_CLK_PWM>;
++		status = "disabled";
++	};
++
++	pwm5: pwm@e6e35000 {
++		compatible = "renesas,pwm-r8a7790", "renesas,pwm-rcar";
++		reg = <0 0xe6e35000 0 0x8>;
++		#pwm-cells = <2>;
++		clocks = <&mstp5_clks R8A7790_CLK_PWM>;
++		status = "disabled";
++	};
++
++	pwm6: pwm@e6e36000 {
++		compatible = "renesas,pwm-r8a7790", "renesas,pwm-rcar";
++		reg = <0 0xe6e36000 0 0x8>;
++		#pwm-cells = <2>;
++		clocks = <&mstp5_clks R8A7790_CLK_PWM>;
++		status = "disabled";
++	};
+ };
+-- 
+1.9.1
+
