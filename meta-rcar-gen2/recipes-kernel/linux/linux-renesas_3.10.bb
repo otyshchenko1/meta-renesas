@@ -130,6 +130,16 @@ SRC_URI_append_lcb = " \
     file://pwm/0009-pwm-pwm-rcar-Revise-the-device-tree-binding-document.patch \
     file://pwm/0010-pinctrl-sh-pfc-r8a7790-Add-PWM-pin-groups-and-functi.patch \
     file://pwm/0011-ARM-shmobile-r8a7790-add-PWM-DT-support.patch \
+    file://0026-R8A7790-add-MLP-clock.patch \
+    file://0027-R8A7790-add-MLP-to-dtsi.patch \
+    file://0028-R8A7790-add-mlp3pin-pinmux.patch \
+    file://0029-R8A7791-add-MLP-clock.patch \
+    file://0030-R8A7791-add-MLP-to-dtsi.patch \
+    file://0031-R8A7791-add-MLP-pin-mux-3-pin-mode-and-fix-typo.patch \
+    file://0032-AVB-support-Lager-Koelsch.patch \
+    file://0033-AVB-support-Porter.patch \
+    file://0034-Renesas-AVB-disable-Receive-FIFO-full-warning.patch \
+    file://0035-add-avb-clock-to-7791.dtsi.patch \
 "
 
 SRC_URI_append_porter = " file://porter.cfg"
@@ -138,6 +148,10 @@ SRC_URI_append_stout = " file://stout.cfg"
 KERNEL_DEVICETREE_append_stout = '${@ \
 	" ${S}/arch/arm/boot/dts/r8a7790-stout-full.dts " if 'stout-full' in '${MACHINE_FEATURES}' else \
 	" ${S}/arch/arm/boot/dts/r8a7790-stout-view.dts " if 'stout-view' in '${MACHINE_FEATURES}' else \
+	""}'
+
+KERNEL_DEVICETREE_append_porter = '${@ \
+	" ${S}/arch/arm/boot/dts/r8a7791-porter-eavb.dts " if 'porter-tse' in '${MACHINE_FEATURES}' else \
 	""}'
 
 PATCHTOOL_rcar-gen2 = "git"
