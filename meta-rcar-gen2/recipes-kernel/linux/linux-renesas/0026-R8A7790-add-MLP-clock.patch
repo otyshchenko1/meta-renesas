@@ -1,0 +1,55 @@
+From 22081b6dda06d72134c13695961f3d91f7ce45f8 Mon Sep 17 00:00:00 2001
+From: Andrey Gusakov <andrey.gusakov@cogentembedded.com>
+Date: Sun, 9 Nov 2014 19:19:01 +0300
+Subject: [PATCH 02/12] R8A7790: add MLP clock
+
+
+Signed-off-by: Andrey Gusakov <andrey.gusakov@cogentembedded.com>
+---
+ arch/arm/boot/dts/r8a7790.dtsi            |   13 +++++++------
+ include/dt-bindings/clock/r8a7790-clock.h |    1 +
+ 2 files changed, 8 insertions(+), 6 deletions(-)
+
+diff --git a/arch/arm/boot/dts/r8a7790.dtsi b/arch/arm/boot/dts/r8a7790.dtsi
+index e879bd1..f6b9473 100644
+--- a/arch/arm/boot/dts/r8a7790.dtsi
++++ b/arch/arm/boot/dts/r8a7790.dtsi
+@@ -900,16 +900,17 @@
+ 		mstp8_clks: mstp8_clks@e6150990 {
+ 			compatible = "renesas,r8a7790-mstp-clocks", "renesas,cpg-mstp-clocks";
+ 			reg = <0 0xe6150990 0 4>, <0 0xe61509a0 0 4>;
+-			clocks = <&zg_clk>, <&zg_clk>, <&zg_clk>, <&zg_clk>, <&p_clk>,
+-				 <&hp_clk>, <&zs_clk>, <&zs_clk>;
++			clocks = <&hp_clk>, <&zg_clk>, <&zg_clk>, <&zg_clk>, <&zg_clk>,
++				 <&p_clk>, <&hp_clk>, <&zs_clk>, <&zs_clk>;
+ 			#clock-cells = <1>;
+ 			renesas,clock-indices = <
+-				R8A7790_CLK_VIN3 R8A7790_CLK_VIN2 R8A7790_CLK_VIN1
+-				R8A7790_CLK_VIN0 R8A7790_CLK_ETHER R8A7790_CLK_AVB
+-				R8A7790_CLK_SATA1 R8A7790_CLK_SATA0
++				R8A7790_CLK_MLB R8A7790_CLK_VIN3 R8A7790_CLK_VIN2
++				R8A7790_CLK_VIN1 R8A7790_CLK_VIN0 R8A7790_CLK_ETHER
++				R8A7790_CLK_AVB R8A7790_CLK_SATA1 R8A7790_CLK_SATA0
+ 			>;
+ 			clock-output-names =
+-				"vin3", "vin2", "vin1", "vin0", "ether", "avb", "sata1", "sata0";
++				"mlb", "vin3", "vin2", "vin1", "vin0", "ether",
++				"avb", "sata1", "sata0";
+ 		};
+ 		mstp9_clks: mstp9_clks@e6150994 {
+ 			compatible = "renesas,r8a7790-mstp-clocks", "renesas,cpg-mstp-clocks";
+diff --git a/include/dt-bindings/clock/r8a7790-clock.h b/include/dt-bindings/clock/r8a7790-clock.h
+index b518e03..0efa36f 100644
+--- a/include/dt-bindings/clock/r8a7790-clock.h
++++ b/include/dt-bindings/clock/r8a7790-clock.h
+@@ -96,6 +96,7 @@
+ #define R8A7790_CLK_LVDS0		26
+ 
+ /* MSTP8 */
++#define R8A7790_CLK_MLB		2
+ #define R8A7790_CLK_VIN3		8
+ #define R8A7790_CLK_VIN2		9
+ #define R8A7790_CLK_VIN1		10
+-- 
+1.7.10.4
+
