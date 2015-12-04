@@ -1,0 +1,41 @@
+From 8b09bb58efa3c392bdf17fc76620f6c29d0f11ce Mon Sep 17 00:00:00 2001
+From: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
+Date: Fri, 4 Dec 2015 11:12:14 +0300
+Subject: [PATCH] Revert "media: soc_camera: rcar_vin: Fix wait_for_completion"
+
+This reverts commit d1e43a755fa31f194238dec5ae3070a008719599.
+Since the patch merged incorrectly.
+
+Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
+---
+ drivers/media/platform/soc_camera/rcar_vin.c | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+diff --git a/drivers/media/platform/soc_camera/rcar_vin.c b/drivers/media/platform/soc_camera/rcar_vin.c
+index fe8f64b..b6b839d 100644
+--- a/drivers/media/platform/soc_camera/rcar_vin.c
++++ b/drivers/media/platform/soc_camera/rcar_vin.c
+@@ -132,8 +132,6 @@
+ #define VIN_MAX_WIDTH		2048
+ #define VIN_MAX_HEIGHT		2048
+ 
+-#define TIMEOUT_MS		100
+-
+ enum chip_id {
+ 	RCAR_GEN2,
+ 	RCAR_H1,
+@@ -842,10 +840,7 @@ static void rcar_vin_videobuf_release(struct vb2_buffer *vb)
+ 			if (priv->state == STOPPING) {
+ 				priv->request_to_stop = true;
+ 				spin_unlock_irq(&priv->lock);
+-				if (!wait_for_completion_timeout(
+-					&priv->capture_stop,
+-					msecs_to_jiffies(TIMEOUT_MS)))
+-					priv->state = STOPPED;
++				wait_for_completion(&priv->capture_stop);
+ 				spin_lock_irq(&priv->lock);
+ 			}
+ 		}
+-- 
+1.9.1
+

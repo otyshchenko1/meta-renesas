@@ -1,0 +1,44 @@
+From 76deaff8085304e9f6a4ce165b61ff467bbcd888 Mon Sep 17 00:00:00 2001
+From: Yoshihiro Kaneko <ykaneko0929@gmail.com>
+Date: Sun, 19 Oct 2014 23:51:29 -0300
+Subject: [PATCH] [media] rcar_vin: Add DT support for r8a7793 and r8a7794 SoCs
+
+Based on platform device work by Matsuoka-san.
+
+Signed-off-by: Yoshihiro Kaneko <ykaneko0929@gmail.com>
+Signed-off-by: Guennadi Liakhovetski <g.liakhovetski@gmx.de>
+Signed-off-by: Mauro Carvalho Chehab <mchehab@osg.samsung.com>
+---
+ Documentation/devicetree/bindings/media/rcar_vin.txt | 2 ++
+ drivers/media/platform/soc_camera/rcar_vin.c         | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/Documentation/devicetree/bindings/media/rcar_vin.txt b/Documentation/devicetree/bindings/media/rcar_vin.txt
+index ba61782..9dafe6b 100644
+--- a/Documentation/devicetree/bindings/media/rcar_vin.txt
++++ b/Documentation/devicetree/bindings/media/rcar_vin.txt
+@@ -6,6 +6,8 @@ family of devices. The current blocks are always slaves and suppot one input
+ channel which can be either RGB, YUYV or BT656.
+ 
+  - compatible: Must be one of the following
++   - "renesas,vin-r8a7794" for the R8A7794 device
++   - "renesas,vin-r8a7793" for the R8A7793 device
+    - "renesas,vin-r8a7791" for the R8A7791 device
+    - "renesas,vin-r8a7790" for the R8A7790 device
+    - "renesas,vin-r8a7779" for the R8A7779 device
+diff --git a/drivers/media/platform/soc_camera/rcar_vin.c b/drivers/media/platform/soc_camera/rcar_vin.c
+index 0891679..c60560a 100644
+--- a/drivers/media/platform/soc_camera/rcar_vin.c
++++ b/drivers/media/platform/soc_camera/rcar_vin.c
+@@ -1893,6 +1893,8 @@ static struct soc_camera_host_ops rcar_vin_host_ops = {
+ 
+ #ifdef CONFIG_OF
+ static struct of_device_id rcar_vin_of_table[] = {
++	{ .compatible = "renesas,vin-r8a7794", .data = (void *)RCAR_GEN2 },
++	{ .compatible = "renesas,vin-r8a7793", .data = (void *)RCAR_GEN2 },
+ 	{ .compatible = "renesas,vin-r8a7791", .data = (void *)RCAR_GEN2 },
+ 	{ .compatible = "renesas,vin-r8a7790", .data = (void *)RCAR_GEN2 },
+ 	{ .compatible = "renesas,vin-r8a7779", .data = (void *)RCAR_H1 },
+-- 
+1.9.1
+

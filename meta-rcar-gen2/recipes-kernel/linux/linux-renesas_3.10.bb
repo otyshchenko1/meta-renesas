@@ -113,7 +113,6 @@ SRC_URI_append_lcb = " \
     file://stout/07-r8a7790-stout/0008-spi-sh-msiof-request-gpios-for-cs-gpios.patch \
     file://stout/07-r8a7790-stout/0009-sh-pfc-r8a7790-add-VIN0-1-_b-pins-support.patch \
     file://stout/07-r8a7790-stout/0010-media-i2c-soc_camera-Add-ov10635-sensor-driver.patch \
-    file://stout/07-r8a7790-stout/0011-media-soc_camera-add-10bit-format-for-rcar_vin.patch \
     file://stout/07-r8a7790-stout/0012-media-i2c-soc_camera-Add-MAX9272-ov10635-camera-driv.patch \
     file://stout/07-r8a7790-stout/0013-ethernet-ravb-introduce-alternative-PHY-MDIO-address.patch \
     file://stout/07-r8a7790-stout/0020-arm-rmobile-Add-R8A7790-stout-board-support.patch \
@@ -140,6 +139,25 @@ SRC_URI_append_lcb = " \
     file://0033-AVB-support-Porter.patch \
     file://0034-Renesas-AVB-disable-Receive-FIFO-full-warning.patch \
     file://0035-add-avb-clock-to-7791.dtsi.patch \
+    file://vin/0001-media-soc_camera-add-10bit-format-for-rcar_vin.patch \
+    file://vin/0002-Revert-media-soc_camera-rcar_vin-Fix-wait_for_comple.patch \
+    file://vin/0003-media-rcar_vin-copy-flags-from-pdata.patch \
+    file://vin/0004-media-rcar_vin-add-devicetree-support.patch \
+    file://vin/0005-media-soc_camera-remove-uneeded-semicolons.patch \
+    file://vin/0006-media-platform-soc_camera-drop-owner-assignment-from.patch \
+    file://vin/0007-media-rcar_vin-Add-DT-support-for-r8a7793-and-r8a779.patch \
+    file://vin/0008-media-rcar_vin-Update-device_caps-and-capabilities-i.patch \
+    file://vin/0009-media-soc_camera-use-vb2_ops_wait_prepare-finish-hel.patch \
+    file://vin/0010-media-rcar_vin-helper-function-for-streaming-stop.patch \
+    file://vin/0011-media-rcar_vin-move-buffer-management-to-.stop_strea.patch \
+    file://vin/0012-media-rcar-vin-Don-t-implement-empty-optional-clock-.patch \
+    file://vin/0013-media-media-soc_camera-rcar_vin-Fix-wait_for_complet.patch \
+    file://vin/0014-media-constify-of_device_id-array.patch \
+    file://vin/0015-media-rcar-vin-use-monotonic-timestamps.patch \
+    file://vin/0016-media-media-rcar_vin-fill-in-bus_info-field.patch \
+    file://vin/0017-media-media-rcar_vin-Reject-videobufs-that-are-too-s.patch \
+    file://vin/0018-media-rcar_vin-propagate-querystd-error-upstream.patch \
+    file://vin/0019-media-rcar_vin-update_state_on_stop_streaming.patch \
 "
 
 SRC_URI_append_porter = " file://porter.cfg"

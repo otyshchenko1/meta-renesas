@@ -1,0 +1,63 @@
+From 7f099a7558e4d308ddb19b3c1737944c371b8f48 Mon Sep 17 00:00:00 2001
+From: Fabian Frederick <fabf@skynet.be>
+Date: Mon, 16 Mar 2015 16:54:33 -0300
+Subject: [PATCH] [media] constify of_device_id array
+
+of_device_id is always used as const.
+(See driver.of_match_table and open firmware functions)
+
+[mchehab@osg.samsung.com: fix a merge conflict at adv7604.c]
+Signed-off-by: Fabian Frederick <fabf@skynet.be>
+Acked-by: Patrice Chotard <patrice.chotard@st.com>
+Signed-off-by: Mauro Carvalho Chehab <mchehab@osg.samsung.com>
+---
+ drivers/media/i2c/adv7604.c                  | 4 ++--
+ drivers/media/platform/fsl-viu.c             | 2 +-
+ drivers/media/platform/soc_camera/rcar_vin.c | 2 +-
+ drivers/media/rc/gpio-ir-recv.c              | 2 +-
+ drivers/media/rc/ir-hix5hd2.c                | 2 +-
+ drivers/media/rc/st_rc.c                     | 2 +-
+ 6 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/media/platform/fsl-viu.c b/drivers/media/platform/fsl-viu.c
+index bbf4281..5b76e3d 100644
+--- a/drivers/media/platform/fsl-viu.c
++++ b/drivers/media/platform/fsl-viu.c
+@@ -1658,7 +1658,7 @@ static int viu_resume(struct platform_device *op)
+ /*
+  * Initialization and module stuff
+  */
+-static struct of_device_id mpc512x_viu_of_match[] = {
++static const struct of_device_id mpc512x_viu_of_match[] = {
+ 	{
+ 		.compatible = "fsl,mpc5121-viu",
+ 	},
+diff --git a/drivers/media/platform/soc_camera/rcar_vin.c b/drivers/media/platform/soc_camera/rcar_vin.c
+index 4c30d0d..4dc3288 100644
+--- a/drivers/media/platform/soc_camera/rcar_vin.c
++++ b/drivers/media/platform/soc_camera/rcar_vin.c
+@@ -1864,7 +1864,7 @@ static struct soc_camera_host_ops rcar_vin_host_ops = {
+ };
+ 
+ #ifdef CONFIG_OF
+-static struct of_device_id rcar_vin_of_table[] = {
++static const struct of_device_id rcar_vin_of_table[] = {
+ 	{ .compatible = "renesas,vin-r8a7794", .data = (void *)RCAR_GEN2 },
+ 	{ .compatible = "renesas,vin-r8a7793", .data = (void *)RCAR_GEN2 },
+ 	{ .compatible = "renesas,vin-r8a7791", .data = (void *)RCAR_GEN2 },
+diff --git a/drivers/media/rc/gpio-ir-recv.c b/drivers/media/rc/gpio-ir-recv.c
+index 229853d..707df54 100644
+--- a/drivers/media/rc/gpio-ir-recv.c
++++ b/drivers/media/rc/gpio-ir-recv.c
+@@ -58,7 +58,7 @@ static int gpio_ir_recv_get_devtree_pdata(struct device *dev,
+ 	return 0;
+ }
+ 
+-static struct of_device_id gpio_ir_recv_of_match[] = {
++static const struct of_device_id gpio_ir_recv_of_match[] = {
+ 	{ .compatible = "gpio-ir-receiver", },
+ 	{ },
+ };
+-- 
+1.9.1
+

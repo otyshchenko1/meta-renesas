@@ -1,0 +1,32 @@
+From b9143e5ac5089561e857e223f7750b85a1951547 Mon Sep 17 00:00:00 2001
+From: Hans Verkuil <hverkuil@xs4all.nl>
+Date: Thu, 7 May 2015 03:26:21 -0300
+Subject: [PATCH] [media] rcar-vin: use monotonic timestamps
+
+Even though the rcar-vin driver tells userspace that it will give a monotonic
+timestamp, it is actually using gettimeofday. Replace this with a proper
+monotonic timestamp.
+
+Signed-off-by: Hans Verkuil <hans.verkuil@cisco.com>
+Acked-by: Laurent Pinchart <laurent.pinchart@ideasonboard.com>
+Signed-off-by: Mauro Carvalho Chehab <mchehab@osg.samsung.com>
+---
+ drivers/media/platform/soc_camera/rcar_vin.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/soc_camera/rcar_vin.c b/drivers/media/platform/soc_camera/rcar_vin.c
+index 4dc3288..db7700b 100644
+--- a/drivers/media/platform/soc_camera/rcar_vin.c
++++ b/drivers/media/platform/soc_camera/rcar_vin.c
+@@ -911,7 +911,7 @@ static irqreturn_t rcar_vin_irq(int irq, void *data)
+ 
+ 		priv->queue_buf[slot]->v4l2_buf.field = priv->field;
+ 		priv->queue_buf[slot]->v4l2_buf.sequence = priv->sequence++;
+-		do_gettimeofday(&priv->queue_buf[slot]->v4l2_buf.timestamp);
++		v4l2_get_timestamp(&priv->queue_buf[slot]->v4l2_buf.timestamp);
+ 		vb2_buffer_done(priv->queue_buf[slot], VB2_BUF_STATE_DONE);
+ 		priv->queue_buf[slot] = NULL;
+ 
+-- 
+1.9.1
+

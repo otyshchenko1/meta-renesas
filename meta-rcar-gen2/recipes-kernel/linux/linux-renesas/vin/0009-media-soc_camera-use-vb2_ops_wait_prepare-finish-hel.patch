@@ -1,0 +1,119 @@
+From 976036df5e09eb0aaabbec77bcac00e6dd66422a Mon Sep 17 00:00:00 2001
+From: "Lad, Prabhakar" <prabhakar.csengg@gmail.com>
+Date: Wed, 26 Nov 2014 19:42:27 -0300
+Subject: [PATCH] [media] soc_camera: use vb2_ops_wait_prepare/finish helper
+
+This patch drops driver specific wait_prepare() and
+wait_finish() callbacks from vb2_ops and instead uses
+the the helpers vb2_ops_wait_prepare/finish() provided
+by the vb2 core, the lock member of the queue needs
+to be initalized to a mutex so that vb2 helpers
+vb2_ops_wait_prepare/finish() can make use of it.
+
+Signed-off-by: Lad, Prabhakar <prabhakar.csengg@gmail.com>
+Cc: Josh Wu <josh.wu@atmel.com>
+Cc: Guennadi Liakhovetski <g.liakhovetski@gmx.de>
+Signed-off-by: Guennadi Liakhovetski <g.liakhovetski@gmx.de>
+Signed-off-by: Mauro Carvalho Chehab <mchehab@osg.samsung.com>
+---
+ drivers/media/platform/soc_camera/atmel-isi.c            |  7 +++++--
+ drivers/media/platform/soc_camera/mx3_camera.c           |  7 +++++--
+ drivers/media/platform/soc_camera/rcar_vin.c             |  7 +++++--
+ drivers/media/platform/soc_camera/sh_mobile_ceu_camera.c |  7 +++++--
+ drivers/media/platform/soc_camera/soc_camera.c           | 16 ----------------
+ 5 files changed, 20 insertions(+), 24 deletions(-)
+
+diff --git a/drivers/media/platform/soc_camera/rcar_vin.c b/drivers/media/platform/soc_camera/rcar_vin.c
+index 9f1473c..9c9d5e2 100644
+--- a/drivers/media/platform/soc_camera/rcar_vin.c
++++ b/drivers/media/platform/soc_camera/rcar_vin.c
+@@ -893,8 +893,8 @@ static struct vb2_ops rcar_vin_vb2_ops = {
+ 	.buf_cleanup	= rcar_vin_videobuf_release,
+ 	.buf_queue	= rcar_vin_videobuf_queue,
+ 	.stop_streaming	= rcar_vin_stop_streaming,
+-	.wait_prepare	= soc_camera_unlock,
+-	.wait_finish	= soc_camera_lock,
++	.wait_prepare	= vb2_ops_wait_prepare,
++	.wait_finish	= vb2_ops_wait_finish,
+ };
+ 
+ static irqreturn_t rcar_vin_irq(int irq, void *data)
+@@ -1864,6 +1864,8 @@ static int rcar_vin_querycap(struct soc_camera_host *ici,
+ static int rcar_vin_init_videobuf2(struct vb2_queue *vq,
+ 				   struct soc_camera_device *icd)
+ {
++	struct soc_camera_host *ici = to_soc_camera_host(icd->parent);
++
+ 	vq->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+ 	vq->io_modes = VB2_MMAP | VB2_USERPTR;
+ 	vq->drv_priv = icd;
+@@ -1871,6 +1873,7 @@ static int rcar_vin_init_videobuf2(struct vb2_queue *vq,
+ 	vq->mem_ops = &vb2_dma_contig_memops;
+ 	vq->buf_struct_size = sizeof(struct rcar_vin_buffer);
+ 	vq->timestamp_type  = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
++	vq->lock = &ici->host_lock;
+ 
+ 	return vb2_queue_init(vq);
+ }
+diff --git a/drivers/media/platform/soc_camera/sh_mobile_ceu_camera.c b/drivers/media/platform/soc_camera/sh_mobile_ceu_camera.c
+index 7178770..9ce202f 100644
+--- a/drivers/media/platform/soc_camera/sh_mobile_ceu_camera.c
++++ b/drivers/media/platform/soc_camera/sh_mobile_ceu_camera.c
+@@ -492,8 +492,8 @@ static struct vb2_ops sh_mobile_ceu_videobuf_ops = {
+ 	.buf_queue	= sh_mobile_ceu_videobuf_queue,
+ 	.buf_cleanup	= sh_mobile_ceu_videobuf_release,
+ 	.buf_init	= sh_mobile_ceu_videobuf_init,
+-	.wait_prepare	= soc_camera_unlock,
+-	.wait_finish	= soc_camera_lock,
++	.wait_prepare	= vb2_ops_wait_prepare,
++	.wait_finish	= vb2_ops_wait_finish,
+ 	.stop_streaming	= sh_mobile_ceu_stop_streaming,
+ };
+ 
+@@ -1650,6 +1650,8 @@ static int sh_mobile_ceu_querycap(struct soc_camera_host *ici,
+ static int sh_mobile_ceu_init_videobuf(struct vb2_queue *q,
+ 				       struct soc_camera_device *icd)
+ {
++	struct soc_camera_host *ici = to_soc_camera_host(icd->parent);
++
+ 	q->type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+ 	q->io_modes = VB2_MMAP | VB2_USERPTR;
+ 	q->drv_priv = icd;
+@@ -1657,6 +1659,7 @@ static int sh_mobile_ceu_init_videobuf(struct vb2_queue *q,
+ 	q->mem_ops = &vb2_dma_contig_memops;
+ 	q->buf_struct_size = sizeof(struct sh_mobile_ceu_buffer);
+ 	q->timestamp_type = V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC;
++	q->lock = &ici->host_lock;
+ 
+ 	return vb2_queue_init(q);
+ }
+diff --git a/drivers/media/platform/soc_camera/soc_camera.c b/drivers/media/platform/soc_camera/soc_camera.c
+index b3db51c..4105a9e 100644
+--- a/drivers/media/platform/soc_camera/soc_camera.c
++++ b/drivers/media/platform/soc_camera/soc_camera.c
+@@ -786,22 +786,6 @@ static unsigned int soc_camera_poll(struct file *file, poll_table *pt)
+ 	return res;
+ }
+ 
+-void soc_camera_lock(struct vb2_queue *vq)
+-{
+-	struct soc_camera_device *icd = vb2_get_drv_priv(vq);
+-	struct soc_camera_host *ici = to_soc_camera_host(icd->parent);
+-	mutex_lock(&ici->host_lock);
+-}
+-EXPORT_SYMBOL(soc_camera_lock);
+-
+-void soc_camera_unlock(struct vb2_queue *vq)
+-{
+-	struct soc_camera_device *icd = vb2_get_drv_priv(vq);
+-	struct soc_camera_host *ici = to_soc_camera_host(icd->parent);
+-	mutex_unlock(&ici->host_lock);
+-}
+-EXPORT_SYMBOL(soc_camera_unlock);
+-
+ static struct v4l2_file_operations soc_camera_fops = {
+ 	.owner		= THIS_MODULE,
+ 	.open		= soc_camera_open,
+-- 
+1.9.1
+

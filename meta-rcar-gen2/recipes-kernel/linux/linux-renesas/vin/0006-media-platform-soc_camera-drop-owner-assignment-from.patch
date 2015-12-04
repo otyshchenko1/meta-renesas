@@ -1,0 +1,71 @@
+From 01945a4e01615033faf0da0b6608858346ea0b57 Mon Sep 17 00:00:00 2001
+From: Wolfram Sang <wsa@the-dreams.de>
+Date: Mon, 20 Oct 2014 16:20:49 +0200
+Subject: [PATCH] media: platform: soc_camera: drop owner assignment from
+ platform_drivers
+
+A platform_driver does not need to set an owner, it will be populated by the
+driver core.
+
+Signed-off-by: Wolfram Sang <wsa@the-dreams.de>
+---
+ drivers/media/platform/soc_camera/atmel-isi.c            | 1 -
+ drivers/media/platform/soc_camera/mx3_camera.c           | 1 -
+ drivers/media/platform/soc_camera/rcar_vin.c             | 1 -
+ drivers/media/platform/soc_camera/sh_mobile_ceu_camera.c | 1 -
+ drivers/media/platform/soc_camera/sh_mobile_csi2.c       | 1 -
+ drivers/media/platform/soc_camera/soc_camera.c           | 1 -
+ drivers/media/platform/soc_camera/soc_camera_platform.c  | 1 -
+ 7 files changed, 7 deletions(-)
+
+diff --git a/drivers/media/platform/soc_camera/rcar_vin.c b/drivers/media/platform/soc_camera/rcar_vin.c
+index 20defcb..fa592a6 100644
+--- a/drivers/media/platform/soc_camera/rcar_vin.c
++++ b/drivers/media/platform/soc_camera/rcar_vin.c
+@@ -2039,7 +2039,6 @@ static struct platform_driver rcar_vin_driver = {
+ 	.remove		= rcar_vin_remove,
+ 	.driver		= {
+ 		.name		= DRV_NAME,
+-		.owner		= THIS_MODULE,
+ 		.of_match_table	= of_match_ptr(rcar_vin_of_table),
+ 	},
+ 	.id_table	= rcar_vin_id_table,
+diff --git a/drivers/media/platform/soc_camera/sh_mobile_csi2.c b/drivers/media/platform/soc_camera/sh_mobile_csi2.c
+index 05dd21a..f4a81ba 100644
+--- a/drivers/media/platform/soc_camera/sh_mobile_csi2.c
++++ b/drivers/media/platform/soc_camera/sh_mobile_csi2.c
+@@ -370,7 +370,6 @@ static struct platform_driver __refdata sh_csi2_pdrv = {
+ 	.probe	= sh_csi2_probe,
+ 	.driver	= {
+ 		.name	= "sh-mobile-csi2",
+-		.owner	= THIS_MODULE,
+ 	},
+ };
+ 
+diff --git a/drivers/media/platform/soc_camera/soc_camera.c b/drivers/media/platform/soc_camera/soc_camera.c
+index 8e61b97..4843df0 100644
+--- a/drivers/media/platform/soc_camera/soc_camera.c
++++ b/drivers/media/platform/soc_camera/soc_camera.c
+@@ -1667,7 +1667,6 @@ static struct platform_driver __refdata soc_camera_pdrv = {
+ 	.remove  = soc_camera_pdrv_remove,
+ 	.driver  = {
+ 		.name	= "soc-camera-pdrv",
+-		.owner	= THIS_MODULE,
+ 	},
+ };
+ 
+diff --git a/drivers/media/platform/soc_camera/soc_camera_platform.c b/drivers/media/platform/soc_camera/soc_camera_platform.c
+index ceaddfb..22bd829 100644
+--- a/drivers/media/platform/soc_camera/soc_camera_platform.c
++++ b/drivers/media/platform/soc_camera/soc_camera_platform.c
+@@ -190,7 +190,6 @@ static int soc_camera_platform_remove(struct platform_device *pdev)
+ static struct platform_driver soc_camera_platform_driver = {
+ 	.driver		= {
+ 		.name	= "soc_camera_platform",
+-		.owner	= THIS_MODULE,
+ 	},
+ 	.probe		= soc_camera_platform_probe,
+ 	.remove		= soc_camera_platform_remove,
+-- 
+1.9.1
+
