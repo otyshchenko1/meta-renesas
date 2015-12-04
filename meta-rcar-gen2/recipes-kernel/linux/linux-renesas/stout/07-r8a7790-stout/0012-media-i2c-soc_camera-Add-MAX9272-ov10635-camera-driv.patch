@@ -213,8 +213,8 @@ index 0000000..e349ce1
 +	if (ret < 0)
 +		return ret;
 +
-+	reg->val = ret;
-+	reg->size = sizeof(u8);
++	reg->val = val;
++	reg->size = sizeof(u16);
 +
 +	return 0;
 +}
