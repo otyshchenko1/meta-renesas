@@ -1,0 +1,70 @@
+From e37a8563fe613578ca6e6003f96eea4334b33255 Mon Sep 17 00:00:00 2001
+From: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
+Date: Sat, 5 Dec 2015 20:32:34 +0300
+Subject: [PATCH] media: rcar_vin: add V4L2_PIX_FMT_GREY format
+
+Add V4L2_PIX_FMT_GREY format
+
+Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
+---
+ drivers/media/platform/soc_camera/rcar_vin.c | 16 +++++++++++++++-
+ 1 file changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/drivers/media/platform/soc_camera/rcar_vin.c b/drivers/media/platform/soc_camera/rcar_vin.c
+index b86d574..1eff11a 100644
+--- a/drivers/media/platform/soc_camera/rcar_vin.c
++++ b/drivers/media/platform/soc_camera/rcar_vin.c
+@@ -122,6 +122,7 @@
+ #define VNIE_EFE		(1 << 1)
+ 
+ /* Video n Data Mode Register bits */
++#define VNDMR_YMODE_Y8		(1 << 12)
+ #define VNDMR_EXRGB		(1 << 8)
+ #define VNDMR_BPSM		(1 << 4)
+ #define VNDMR_DTMD_YCSEP	(1 << 1)
+@@ -664,6 +665,10 @@ static int rcar_vin_setup(struct rcar_vin_priv *priv)
+ 		dmr = 0;
+ 		output_is_yuv = true;
+ 		break;
++	case V4L2_PIX_FMT_GREY:
++		dmr = VNDMR_DTMD_YCSEP | VNDMR_YMODE_Y8;
++		output_is_yuv = true;
++		break;
+ 	case V4L2_PIX_FMT_RGB555X:
+ 		dmr = VNDMR_DTMD_ARGB1555;
+ 		break;
+@@ -1327,6 +1332,14 @@ static const struct soc_mbus_pixelfmt rcar_vin_formats[] = {
+ 		.layout			= SOC_MBUS_LAYOUT_PACKED,
+ 	},
+ 	{
++		.fourcc			= V4L2_PIX_FMT_GREY,
++		.name			= "GREY8",
++		.bits_per_sample	= 8,
++		.packing		= SOC_MBUS_PACKING_NONE,
++		.order			= SOC_MBUS_ORDER_LE,
++		.layout			= SOC_MBUS_LAYOUT_PACKED,
++	},
++	{
+ 		.fourcc			= V4L2_PIX_FMT_RGB565,
+ 		.name			= "RGB565",
+ 		.bits_per_sample	= 16,
+@@ -1666,6 +1679,7 @@ static int rcar_vin_set_fmt(struct soc_camera_device *icd,
+ 		break;
+ 	case V4L2_PIX_FMT_UYVY:
+ 	case V4L2_PIX_FMT_YUYV:
++	case V4L2_PIX_FMT_GREY:
+ 	case V4L2_PIX_FMT_RGB565:
+ 	case V4L2_PIX_FMT_RGB555X:
+ 	case V4L2_PIX_FMT_NV16: /* horizontal scaling-up only is supported */
+@@ -1758,7 +1772,7 @@ static int rcar_vin_try_fmt(struct soc_camera_device *icd,
+ 	   odd number clipping by pixel post clip processing, it is outputted
+ 	   to a memory per even pixels. */
+ 	if ((pixfmt == V4L2_PIX_FMT_NV16) || (pixfmt == V4L2_PIX_FMT_YUYV) ||
+-		(pixfmt == V4L2_PIX_FMT_UYVY))
++		(pixfmt == V4L2_PIX_FMT_UYVY) || (pixfmt == V4L2_PIX_FMT_GREY))
+ 		v4l_bound_align_image(&pix->width, 5, VIN_MAX_WIDTH, 1,
+ 				      &pix->height, 2, VIN_MAX_HEIGHT, 0, 0);
+ 	else
+-- 
+1.9.1
+
