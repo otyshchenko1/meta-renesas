@@ -9,13 +9,13 @@ Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
 ---
  drivers/media/i2c/soc_camera/Kconfig               |   7 +
  drivers/media/i2c/soc_camera/Makefile              |   1 +
- drivers/media/i2c/soc_camera/max9272_ov10635.c     | 322 +++++++
+ drivers/media/i2c/soc_camera/max9272_ov10635.c     | 360 ++++++++
  drivers/media/i2c/soc_camera/max9272_ov10635.h     | 241 ++++++
  .../media/i2c/soc_camera/max9272_ov10635_setup.c   | 207 +++++
  .../media/i2c/soc_camera/max9272_ov10635_wizard.h  | 358 ++++++++
  .../soc_camera/max9272_ov10635_wizard_1280x800.h   | 941 +++++++++++++++++++++
  .../soc_camera/max9272_ov10635_wizard_debug_fps.h  | 291 +++++++
- 8 files changed, 2368 insertions(+)
+ 8 files changed, 2406 insertions(+)
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.c
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.h
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
@@ -54,10 +54,10 @@ index f3d3403..d1b00b5 100644
  obj-$(CONFIG_SOC_CAMERA_TW9910)		+= tw9910.o
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635.c b/drivers/media/i2c/soc_camera/max9272_ov10635.c
 new file mode 100644
-index 0000000..e349ce1
+index 0000000..0d9b009
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635.c
-@@ -0,0 +1,322 @@
+@@ -0,0 +1,360 @@
 +/*
 + * MAXIM max9272-max9271 with OmniVision ov10635 sensor camera driver
 + *
@@ -77,6 +77,7 @@ index 0000000..e349ce1
 +
 +#include <media/soc_camera.h>
 +#include <media/v4l2-common.h>
++#include <media/v4l2-ctrls.h>
 +
 +#include "max9272_ov10635.h"
 +
@@ -99,9 +100,10 @@ index 0000000..e349ce1
 +#endif
 +
 +struct ov10635_priv {
-+	struct v4l2_subdev	sd;
-+	int			width;
-+	int			height;
++	struct v4l2_subdev		sd;
++	struct v4l2_ctrl_handler	hdl;
++	int				width;
++	int				height;
 +};
 +
 +static inline struct ov10635_priv *to_ov10635(const struct i2c_client *client)
@@ -235,6 +237,23 @@ index 0000000..e349ce1
 +#endif
 +};
 +
++static int ov10635_s_ctrl(struct v4l2_ctrl *ctrl)
++{
++	switch (ctrl->id) {
++	case V4L2_CID_BRIGHTNESS:
++	case V4L2_CID_CONTRAST:
++	case V4L2_CID_SATURATION:
++	case V4L2_CID_HUE:
++		return 0;
++	default:
++		return -EINVAL;
++	}
++}
++
++static const struct v4l2_ctrl_ops ov10635_ctrl_ops = {
++	.s_ctrl = ov10635_s_ctrl,
++};
++
 +static struct v4l2_subdev_video_ops ov10635_video_ops = {
 +	.s_stream	= ov10635_s_stream,
 +	.g_mbus_fmt	= ov10635_g_fmt,
@@ -329,6 +348,23 @@ index 0000000..e349ce1
 +
 +	v4l2_i2c_subdev_init(&priv->sd, client, &ov10635_subdev_ops);
 +
++	v4l2_ctrl_handler_init(&priv->hdl, 4);
++	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
++			  V4L2_CID_BRIGHTNESS, 0, 255, 1, 0);
++	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
++			  V4L2_CID_CONTRAST, 0, 255, 1, 0);
++	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
++			  V4L2_CID_SATURATION, 0, 255, 1, 0);
++	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
++			  V4L2_CID_HUE, 0, 255, 1, 0);
++	priv->sd.ctrl_handler = &priv->hdl;
++
++	ret = priv->hdl.error;
++	if (ret)
++		goto cleanup;
++
++	v4l2_ctrl_handler_setup(&priv->hdl);
++
 +	ret = ov10635_initialize(client);
 +	if (ret < 0)
 +		goto cleanup;
@@ -336,6 +372,7 @@ index 0000000..e349ce1
 +	return 0;
 +
 +cleanup:
++	v4l2_ctrl_handler_free(&priv->hdl);
 +	v4l2_device_unregister_subdev(&priv->sd);
 +	v4l_err(client, "failed to probe @ 0x%02x (%s)\n",
 +		client->addr, client->adapter->name);
@@ -346,6 +383,7 @@ index 0000000..e349ce1
 +{
 +	struct ov10635_priv *priv = i2c_get_clientdata(client);
 +
++	v4l2_ctrl_handler_free(&priv->hdl);
 +	v4l2_device_unregister_subdev(&priv->sd);
 +
 +	return 0;
