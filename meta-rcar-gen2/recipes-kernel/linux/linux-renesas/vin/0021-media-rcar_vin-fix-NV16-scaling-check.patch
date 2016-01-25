@@ -1,0 +1,75 @@
+From c3fce6a00a883f4b4e8bcab293091e837282a6b2 Mon Sep 17 00:00:00 2001
+From: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
+Date: Tue, 26 Jan 2016 01:56:17 +0300
+Subject: [PATCH] media: rcar_vin: Fix NV16 format scaling check
+
+The NV16 VIN scaling check must follow the camera sensor S_FMT
+
+Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
+---
+ drivers/media/platform/soc_camera/rcar_vin.c | 42 ++++++++++++++--------------
+ 1 file changed, 21 insertions(+), 21 deletions(-)
+
+diff --git a/drivers/media/platform/soc_camera/rcar_vin.c b/drivers/media/platform/soc_camera/rcar_vin.c
+index 1eff11a..865f2a1 100644
+--- a/drivers/media/platform/soc_camera/rcar_vin.c
++++ b/drivers/media/platform/soc_camera/rcar_vin.c
+@@ -1614,27 +1614,6 @@ static int rcar_vin_set_fmt(struct soc_camera_device *icd,
+ 	dev_dbg(dev, "S_FMT(pix=0x%x, %ux%u)\n",
+ 		pixfmt, pix->width, pix->height);
+ 
+-	/* At the time of NV16 capture format, the user has to specify the
+-	   width of the multiple of 32 for H/W specification. */
+-	if (priv->error_flag == false)
+-		priv->error_flag = true;
+-	else {
+-		if (pixfmt == V4L2_PIX_FMT_NV16) {
+-			if (pix->width & 0x1F) {
+-				dev_err(icd->parent,
+-				"Specified width error in NV16 format. "
+-				"Please specify the multiple of 32.\n");
+-				return -EINVAL;
+-			}
+-			if (pix->height != cam->height) {
+-				dev_err(icd->parent,
+-				"Vertical scaling-up error in NV16 format. "
+-				"Please specify input height size.\n");
+-				return -EINVAL;
+-			}
+-		}
+-	}
+-
+ 	switch (pix->field) {
+ 	default:
+ 		pix->field = V4L2_FIELD_NONE;
+@@ -1712,6 +1691,27 @@ static int rcar_vin_set_fmt(struct soc_camera_device *icd,
+ 	cam->width = mf.width;
+ 	cam->height = mf.height;
+ 
++	/* At the time of NV16 capture format, the user has to specify the
++	   width of the multiple of 32 for H/W specification. */
++	if (priv->error_flag == false)
++		priv->error_flag = true;
++	else {
++		if (pixfmt == V4L2_PIX_FMT_NV16) {
++			if (pix->width & 0x1F) {
++				dev_err(icd->parent,
++				"Specified width error in NV16 format. "
++				"Please specify the multiple of 32.\n");
++				return -EINVAL;
++			}
++			if (pix->height != cam->height) {
++				dev_err(icd->parent,
++				"Vertical scaling-up error in NV16 format. "
++				"Please specify input height size.\n");
++				return -EINVAL;
++			}
++		}
++	}
++
+ 	/* Use VIN scaling to scale to the requested user window. */
+ 
+ 	/* We cannot scale up */
+-- 
+1.9.1
+

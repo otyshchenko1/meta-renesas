@@ -159,6 +159,7 @@ SRC_URI_append_lcb = " \
     file://vin/0018-media-rcar_vin-propagate-querystd-error-upstream.patch \
     file://vin/0019-media-rcar_vin-update_state_on_stop_streaming.patch \
     file://vin/0020-media-rcar_vin-add-V4L2_PIX_FMT_GREY-format.patch \
+    file://vin/0021-media-rcar_vin-fix-NV16-scaling-check.patch \
 	file://0036-R-Car-H2-Add-IMR-X2-V4L2-M2M-driver.patch \
 "
 
