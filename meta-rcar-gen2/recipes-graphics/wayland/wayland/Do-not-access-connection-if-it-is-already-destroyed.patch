@@ -1,0 +1,30 @@
+From 50fdd57e44e452f4db5984eed16ca758019b86ba Mon Sep 17 00:00:00 2001
+From: Andrey Vostrikov <andrey.vostrikov@cogentembedded.com>
+Date: Fri, 2 Oct 2015 16:40:51 +0300
+Subject: [PATCH] Do not access connection if it is already destroyed
+
+---
+ src/wayland-client.c | 7 +++++++
+ 1 file changed, 7 insertions(+)
+
+diff --git a/src/wayland-client.c b/src/wayland-client.c
+index c704dfe..71be6bc 100644
+--- a/src/wayland-client.c
++++ b/src/wayland-client.c
+@@ -1068,6 +1068,13 @@ read_events(struct wl_display *display)
+ 
+ 	display->reader_count--;
+ 	if (display->reader_count == 0) {
++        if (display->connection == NULL) {
++            /* in some multithreaded apps, connection is destroyed while event is being dispatched */
++            errno = EPIPE;
++            display_fatal_error(display, errno);
++            return -1;
++        }
++
+ 		total = wl_connection_read(display->connection);
+ 		if (total == -1) {
+ 			if (errno == EAGAIN)
+-- 
+2.1.4
+

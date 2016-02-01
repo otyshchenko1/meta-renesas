@@ -18,7 +18,8 @@ SRC_URI_append_class-native = " \
     "
 SRC_URI_append = " \
 	file://prevent-simultaneous-poll-for-queue-dispatch.patch \
-	"
+	file://Do-not-access-connection-if-it-is-already-destroyed.patch \
+"
 
 EXTRA_OECONF_class-native = "--disable-documentation --enable-scanner"
 
