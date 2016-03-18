@@ -160,7 +160,31 @@ SRC_URI_append_lcb = " \
     file://vin/0019-media-rcar_vin-update_state_on_stop_streaming.patch \
     file://vin/0020-media-rcar_vin-add-V4L2_PIX_FMT_GREY-format.patch \
     file://vin/0021-media-rcar_vin-fix-NV16-scaling-check.patch \
-	file://0036-R-Car-H2-Add-IMR-X2-V4L2-M2M-driver.patch \
+    file://0036-R-Car-H2-Add-IMR-X2-V4L2-M2M-driver.patch \
+    file://fixed_phy/0001-net-phy-breakdown-PHY_-_FEATURES-defines.patch \
+    file://fixed_phy/0002-net-phy-decouple-PHY-id-and-PHY-address-in-fixed-PHY.patch \
+    file://fixed_phy/0003-net-phy-extend-fixed-driver-with-fixed_phy_register.patch \
+    file://fixed_phy/0004-net-of_mdio-factor-PHY-registration-from-of_mdiobus_.patch \
+    file://fixed_phy/0005-net-of_mdio-use-PHY_MAX_ADDR-constant.patch \
+    file://fixed_phy/0006-net-of_mdio-do-not-overwrite-PHY-interrupt-configura.patch \
+    file://fixed_phy/0007-net-of_mdio-parse-max-speed-property-to-set-PHY-supp.patch \
+    file://fixed_phy/0008-phylib-Add-of_phy_attach.patch \
+    file://fixed_phy/0009-net-of_mdio-fix-of_set_phy_supported-after-driver-pr.patch \
+    file://fixed_phy/0010-of_mdio-fix-phy-interrupt-passing.patch \
+    file://fixed_phy/0011-of_mdio-Allow-the-DT-to-specify-the-phy-ID-and-avoid.patch \
+    file://fixed_phy/0012-of-provide-a-binding-for-fixed-link-PHYs.patch \
+    file://fixed_phy/0013-of-mdio-remove-of_phy_connect_fixed_link.patch \
+    file://fixed_phy/0014-net-of_mdio-factor-out-code-to-parse-a-phy-s-reg-pro.patch \
+    file://fixed_phy/0015-net-of_mdio-add-of_mdiobus_link_phydev.patch \
+    file://fixed_phy/0016-net-of_mdio-don-t-store-the-length-of-a-property-if-.patch \
+    file://fixed_phy/0017-net-of_mdio-use-int-type-for-address-variable.patch \
+    file://fixed_phy/0018-of-of_mdio-export-symbol-of_mdiobus_link_phydev.patch \
+    file://fixed_phy/0019-of-mdio-fixup-of_phy_register_fixed_link-parsing-of-.patch \
+    file://fixed_phy/0020-net-fix-circular-dependency-in-of_mdio-code.patch \
+    file://fixed_phy/0021-of-mdio-honor-flags-passed-to-of_phy_connect.patch \
+    file://fixed_phy/0022-of-mdio-export-of_mdio_parse_addr.patch \
+    file://0037-ravb-Add-fixed-link-support.patch \
+    file://0038-sh-eth-Add-fixed-link-support.patch \
 "
 
 SRC_URI_append_porter = " file://porter.cfg"
