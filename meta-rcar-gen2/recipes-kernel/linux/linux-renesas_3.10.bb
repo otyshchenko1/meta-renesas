@@ -118,6 +118,7 @@ SRC_URI_append_lcb = " \
     file://stout/07-r8a7790-stout/0020-arm-rmobile-Add-R8A7790-stout-board-support.patch \
     file://stout/07-r8a7790-stout/0022-arm-rmobile-Add-R8A7790-stout-full-board-support.patch \
     file://stout/07-r8a7790-stout/0023-arm-rmobile-Add-R8A7790-stout-view-board-support.patch \
+    file://stout/07-r8a7790-stout/0024-arm-rmobile-Add-R8A7790-stout-had-board-support.patch \
     file://pwm/0001-pwm-Add-pwm_get_polarity-helper-function.patch \
     file://pwm/0002-pwm-Add-sysfs-interface.patch \
     file://pwm/0003-pwm-Add-the-pwm_is_enabled-helper.patch \
@@ -193,6 +194,7 @@ SRC_URI_append_stout = " file://stout.cfg"
 KERNEL_DEVICETREE_append_stout = '${@ \
 	" ${S}/arch/arm/boot/dts/r8a7790-stout-full.dts " if 'stout-full' in '${MACHINE_FEATURES}' else \
 	" ${S}/arch/arm/boot/dts/r8a7790-stout-view.dts " if 'stout-view' in '${MACHINE_FEATURES}' else \
+	" ${S}/arch/arm/boot/dts/r8a7790-stout-had.dts " if 'stout-had' in '${MACHINE_FEATURES}' else \
 	""}'
 
 KERNEL_DEVICETREE_append_porter = '${@ \
