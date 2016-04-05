@@ -30,7 +30,7 @@ index b86d574..1eff11a 100644
 +		dmr = VNDMR_DTMD_YCSEP | VNDMR_YMODE_Y8;
 +		output_is_yuv = true;
 +		break;
- 	case V4L2_PIX_FMT_RGB555X:
+ 	case V4L2_PIX_FMT_ARGB555:
  		dmr = VNDMR_DTMD_ARGB1555;
  		break;
 @@ -1327,6 +1332,14 @@ static const struct soc_mbus_pixelfmt rcar_vin_formats[] = {
@@ -54,7 +54,7 @@ index b86d574..1eff11a 100644
  	case V4L2_PIX_FMT_YUYV:
 +	case V4L2_PIX_FMT_GREY:
  	case V4L2_PIX_FMT_RGB565:
- 	case V4L2_PIX_FMT_RGB555X:
+ 	case V4L2_PIX_FMT_ARGB555:
  	case V4L2_PIX_FMT_NV16: /* horizontal scaling-up only is supported */
 @@ -1758,7 +1772,7 @@ static int rcar_vin_try_fmt(struct soc_camera_device *icd,
  	   odd number clipping by pixel post clip processing, it is outputted

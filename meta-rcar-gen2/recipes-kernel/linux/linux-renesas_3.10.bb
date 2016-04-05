@@ -12,7 +12,7 @@ PV_append = "+git${SRCREV}"
 RENESAS_BACKPORTS_URL="git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas-backport.git"
 SRCREV = "ef3cb04de0d01178a64fea73ffa4c5e21e79f310"
 SRC_URI = " \
-    ${RENESAS_BACKPORTS_URL};protocol=git;branch=bsp/v3.10.31-ltsi/rcar-gen2-1.9.4 \
+    ${RENESAS_BACKPORTS_URL};protocol=git;branch=bsp/v3.10.31-ltsi/rcar-gen2-1.9.7 \
     file://0001-arm-lager-Add-vmalloc-384M-to-bootargs-of-DTS.patch \
     file://0001-arm-koelsch-Add-vmalloc-384M-to-bootargs-of-DTS.patch \
     file://0001-arm-alt-Add-vmalloc-384M-to-bootargs-of-DTS.patch \
@@ -49,19 +49,6 @@ SRC_URI_append_lcb = " \
     file://0023-ARM-shmobile-r8a7791-Add-JPU-clock-dt-and-CPG-define.patch \
     file://0024-ARM-shmobile-r8a7790-Add-JPU-device-node.patch \
     file://0025-ARM-shmobile-r8a7791-Add-JPU-device-node.patch \
-    file://sh-sci/0001-serial-sh-sci-Fix-the-problem-that-stops-console-s-o.patch \
-    file://sh-sci/0002-serial-sh-sci-Fix-kernel-panic-after-closing-driver.patch \
-    file://sh-sci/0003-serial-sh-sci-Fix-race-condition-of-SCSCR-register-a.patch \
-    file://sh-sci/0004-serial-sh-sci-Fix-repeats-of-previous-printed-messag.patch \
-    file://sh-sci/0005-serial-sh-sci-Fix-hang-up-in-rebooting-with-DMA-tran.patch \
-    file://sh-sci/0006-serial-sh-sci-Fix-illegal-use-of-disable_irq_nosync-.patch \
-    file://sh-sci/0007-serial-sh-sci-Don-t-kick-tx-in-sci_er_interrupt-when.patch \
-    file://sh-sci/0008-serial-sh-sci-Fix-hang-up-in-key-input-during-startu.patch \
-    file://sh-sci/0009-serial-sh-sci-Fix-deadlock-caused-by-serial-output-r.patch \
-    file://sh-sci/0010-serial-sh-sci-Fix-unlocked-access-to-SCSCR-register.patch \
-    file://sh-sci/0011-serial-sh-sci-Add-lock-to-prevent-the-SCSCR-register.patch \
-    file://sh-sci/0012-serial-sh-sci-Fix-compile-warning-in-sci_flush_buffe.patch \
-    file://sh-sci/0013-serial-sh-sci-Fix-deadlock-caused-by-the-double-spin.patch \
     file://stout/01-da9063_rtc/0001-rtc-da9063-RTC-driver.patch \
     file://stout/02-da9063_mfd/0001-mfd-da9063-Add-IRQ-support.patch \
     file://stout/02-da9063_mfd/0003-mfd-da9063-Add-support-for-production-silicon-varian.patch \
@@ -141,7 +128,6 @@ SRC_URI_append_lcb = " \
     file://0034-Renesas-AVB-disable-Receive-FIFO-full-warning.patch \
     file://0035-add-avb-clock-to-7791.dtsi.patch \
     file://vin/0001-media-soc_camera-add-10bit-format-for-rcar_vin.patch \
-    file://vin/0002-Revert-media-soc_camera-rcar_vin-Fix-wait_for_comple.patch \
     file://vin/0003-media-rcar_vin-copy-flags-from-pdata.patch \
     file://vin/0004-media-rcar_vin-add-devicetree-support.patch \
     file://vin/0005-media-soc_camera-remove-uneeded-semicolons.patch \
@@ -149,10 +135,7 @@ SRC_URI_append_lcb = " \
     file://vin/0007-media-rcar_vin-Add-DT-support-for-r8a7793-and-r8a779.patch \
     file://vin/0008-media-rcar_vin-Update-device_caps-and-capabilities-i.patch \
     file://vin/0009-media-soc_camera-use-vb2_ops_wait_prepare-finish-hel.patch \
-    file://vin/0010-media-rcar_vin-helper-function-for-streaming-stop.patch \
-    file://vin/0011-media-rcar_vin-move-buffer-management-to-.stop_strea.patch \
     file://vin/0012-media-rcar-vin-Don-t-implement-empty-optional-clock-.patch \
-    file://vin/0013-media-media-soc_camera-rcar_vin-Fix-wait_for_complet.patch \
     file://vin/0014-media-constify-of_device_id-array.patch \
     file://vin/0015-media-rcar-vin-use-monotonic-timestamps.patch \
     file://vin/0016-media-media-rcar_vin-fill-in-bus_info-field.patch \

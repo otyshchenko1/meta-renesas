@@ -28,7 +28,7 @@ index 9f1473c..9c9d5e2 100644
 --- a/drivers/media/platform/soc_camera/rcar_vin.c
 +++ b/drivers/media/platform/soc_camera/rcar_vin.c
 @@ -893,8 +893,8 @@ static struct vb2_ops rcar_vin_vb2_ops = {
- 	.buf_cleanup	= rcar_vin_videobuf_release,
+ 	.queue_setup	= rcar_vin_videobuf_setup,
  	.buf_queue	= rcar_vin_videobuf_queue,
  	.stop_streaming	= rcar_vin_stop_streaming,
 -	.wait_prepare	= soc_camera_unlock,
