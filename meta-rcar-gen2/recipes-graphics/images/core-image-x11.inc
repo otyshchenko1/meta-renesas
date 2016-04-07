@@ -12,4 +12,5 @@ IMAGE_INSTALL_append_lcb = ' ${@base_conditional("USE_MULTIMEDIA", "1", " \
 IMAGE_INSTALL_append_lcb = " \
     can-utils \
     libsocketcan \
+    spidev-dbg \
 "

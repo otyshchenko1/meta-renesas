@@ -15,4 +15,5 @@ IMAGE_INSTALL_append_lcb = " \
     libsocketcan \
     iproute2 \
 	libpcap \
+    spidev-dbg \
 "
