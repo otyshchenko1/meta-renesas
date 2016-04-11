@@ -9,13 +9,13 @@ Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
 ---
  drivers/media/i2c/soc_camera/Kconfig               |    7 +
  drivers/media/i2c/soc_camera/Makefile              |    1 +
- drivers/media/i2c/soc_camera/max9272_ov10635.c     |  509 ++++++++++
+ drivers/media/i2c/soc_camera/max9272_ov10635.c     |  538 ++++++++++
  drivers/media/i2c/soc_camera/max9272_ov10635.h     |  241 +++++
  .../media/i2c/soc_camera/max9272_ov10635_setup.c   |  207 ++++
  .../media/i2c/soc_camera/max9272_ov10635_wizard.h  |  364 +++++++
  .../soc_camera/max9272_ov10635_wizard_1280x800.h   | 1033 ++++++++++++++++++++
  .../soc_camera/max9272_ov10635_wizard_debug_fps.h  |  291 ++++++
- 8 files changed, 2653 insertions(+)
+ 8 files changed, 2682 insertions(+)
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.c
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.h
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
@@ -54,10 +54,10 @@ index f3d3403..d1b00b5 100644
  obj-$(CONFIG_SOC_CAMERA_TW9910)		+= tw9910.o
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635.c b/drivers/media/i2c/soc_camera/max9272_ov10635.c
 new file mode 100644
-index 0000000..633fab1
+index 0000000..23e70fd
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635.c
-@@ -0,0 +1,509 @@
+@@ -0,0 +1,538 @@
 +/*
 + * MAXIM max9272-max9271 with OmniVision ov10635 sensor camera driver
 + *
@@ -412,6 +412,29 @@ index 0000000..633fab1
 +	.video	= &ov10635_video_ops,
 +};
 +
++static ssize_t
++ov10635_otp_id_read(struct device *dev, struct device_attribute *attr, char *buf)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(to_i2c_client(dev));
++	struct i2c_client *client = v4l2_get_subdevdata(sd);
++	u8 id[5];
++	int i;
++
++	/* read camera id from OTP memory */
++	maxim_reg16_write(client, 0x100, 1);
++	for (i = 0; i < 5; i++)
++		maxim_reg16_write(client, 0x3d00 + i, 0x00);
++	maxim_reg16_write(client, 0x3d10, 0);
++	maxim_reg16_write(client, 0x3d10, 1);
++	mdelay(15);
++	for (i = 0; i < 5; i++)
++		maxim_reg16_read(client, 0x3d00 + i, &id[i]);
++	return snprintf(buf, 32, "%02x:%02x:%02x:%02x:%02x\n",
++		 id[0], id[1], id[2], id[3], id[4]);
++}
++
++static DEVICE_ATTR(otp_id, S_IRUGO, ov10635_otp_id_read, NULL);
++
 +#ifdef OV10635_WIZARD_DEBUG_FPS
 +#include "max9272_ov10635_wizard_debug_fps.h"
 +#endif
@@ -518,6 +541,11 @@ index 0000000..633fab1
 +	if (ret < 0)
 +		goto cleanup;
 +
++	if (device_create_file(&client->dev, &dev_attr_otp_id) != 0) {
++		dev_err(&client->dev, "sysfs otp_id entry creation failed\n");
++		goto cleanup;
++	}
++
 +	return 0;
 +
 +cleanup:
@@ -532,6 +560,7 @@ index 0000000..633fab1
 +{
 +	struct ov10635_priv *priv = i2c_get_clientdata(client);
 +
++	device_remove_file(&client->dev, &dev_attr_otp_id);
 +	v4l2_ctrl_handler_free(&priv->hdl);
 +	v4l2_device_unregister_subdev(&priv->sd);
 +
