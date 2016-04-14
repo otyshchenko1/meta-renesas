@@ -169,6 +169,7 @@ SRC_URI_append_lcb = " \
     file://fixed_phy/0022-of-mdio-export-of_mdio_parse_addr.patch \
     file://0037-ravb-Add-fixed-link-support.patch \
     file://0038-sh-eth-Add-fixed-link-support.patch \
+    file://0039-spi-sh-msiof-fix-incorrect-udelay.patch \
 "
 
 SRC_URI_append_porter = " file://porter.cfg"
