@@ -9,13 +9,13 @@ Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
 ---
  drivers/media/i2c/soc_camera/Kconfig               |    7 +
  drivers/media/i2c/soc_camera/Makefile              |    1 +
- drivers/media/i2c/soc_camera/max9272_ov10635.c     |  538 ++++++++++
+ drivers/media/i2c/soc_camera/max9272_ov10635.c     |  611 +++++++++++
  drivers/media/i2c/soc_camera/max9272_ov10635.h     |  241 +++++
  .../media/i2c/soc_camera/max9272_ov10635_setup.c   |  207 ++++
  .../media/i2c/soc_camera/max9272_ov10635_wizard.h  |  364 +++++++
- .../soc_camera/max9272_ov10635_wizard_1280x800.h   | 1033 ++++++++++++++++++++
- .../soc_camera/max9272_ov10635_wizard_debug_fps.h  |  291 ++++++
- 8 files changed, 2682 insertions(+)
+ .../soc_camera/max9272_ov10635_wizard_1280x800.h   | 1132 ++++++++++++++++++++
+ .../soc_camera/max9272_ov10635_wizard_debug_fps.h  |  291 +++++
+ 8 files changed, 2854 insertions(+)
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.c
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.h
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
@@ -54,10 +54,10 @@ index f3d3403..d1b00b5 100644
  obj-$(CONFIG_SOC_CAMERA_TW9910)		+= tw9910.o
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635.c b/drivers/media/i2c/soc_camera/max9272_ov10635.c
 new file mode 100644
-index 0000000..23e70fd
+index 0000000..d36ef19
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635.c
-@@ -0,0 +1,538 @@
+@@ -0,0 +1,611 @@
 +/*
 + * MAXIM max9272-max9271 with OmniVision ov10635 sensor camera driver
 + *
@@ -110,6 +110,11 @@ index 0000000..23e70fd
 +static inline struct ov10635_priv *to_ov10635(const struct i2c_client *client)
 +{
 +	return container_of(i2c_get_clientdata(client), struct ov10635_priv, sd);
++}
++
++static inline struct v4l2_subdev *to_sd(struct v4l2_ctrl *ctrl)
++{
++	return &container_of(ctrl->handler, struct ov10635_priv, hdl)->sd;
 +}
 +
 +static int ov10635_set_regs(struct i2c_client *client,
@@ -378,15 +383,70 @@ index 0000000..23e70fd
 +
 +static int ov10635_s_ctrl(struct v4l2_ctrl *ctrl)
 +{
++	struct v4l2_subdev *sd = to_sd(ctrl);
++	struct i2c_client *client = v4l2_get_subdevdata(sd);
++	int ret = -EINVAL;
++	u8 val;
++
 +	switch (ctrl->id) {
 +	case V4L2_CID_BRIGHTNESS:
++		/* AEC/AGC target */
++		ret = maxim_reg16_write(client, 0xc46a, ctrl->val);
++		break;
 +	case V4L2_CID_CONTRAST:
++		ret = ov10635_set_regs(client, &ov10635_regs_contrast[ctrl->val][0], 18);
++		break;
 +	case V4L2_CID_SATURATION:
++		ret = maxim_reg16_write(client, 0xc316, ctrl->val);
++		break;
 +	case V4L2_CID_HUE:
++		/* CMX ? */
 +		return 0;
-+	default:
-+		return -EINVAL;
++	case V4L2_CID_GAMMA:
++		ret = maxim_reg16_write(client, 0xc4be, ctrl->val >> 8);
++		ret |= maxim_reg16_write(client, 0xc4bf, ctrl->val & 0xff);
++		break;
++	case V4L2_CID_AUTOGAIN:
++		/* automatic gain/exposure */
++		ret = maxim_reg16_write(client, 0x56d0, !ctrl->val);
++		break;
++	case V4L2_CID_GAIN:
++		/* manual gain */
++		ret = maxim_reg16_write(client, 0x3504, 0);
++		ret |= maxim_reg16_write(client, 0x56d1, ctrl->val >> 8);
++		ret |= maxim_reg16_write(client, 0x56d2, ctrl->val & 0xff);
++		ret |= maxim_reg16_write(client, 0x3504, 1); /* validate gain */
++		break;
++	case V4L2_CID_EXPOSURE:
++		/* maual exposure */
++		ret = maxim_reg16_write(client, 0x3504, 0);
++		ret |= maxim_reg16_write(client, 0x56d5, ctrl->val >> 8);
++		ret |= maxim_reg16_write(client, 0x56d6, ctrl->val & 0xff);
++		ret |= maxim_reg16_write(client, 0x3504, 1); /* validate exposure */
++		break;
++	case V4L2_CID_HFLIP:
++		ret = maxim_reg16_read(client, 0x381d, &val);
++		if (ret < 0)
++			return ret;
++		if (ctrl->val)
++			val |= 0x3;
++		else
++			val &= ~0x3;
++		ret = maxim_reg16_write(client, 0x381d, val);
++		break;
++	case V4L2_CID_VFLIP:
++		ret = maxim_reg16_read(client, 0x381c, &val);
++		if (ret < 0)
++			return ret;
++		if (ctrl->val)
++			val |= 0xc0;
++		else
++			val &= ~0xc0;
++		ret = maxim_reg16_write(client, 0x381c, val);
++		break;
 +	}
++
++	return ret;
 +}
 +
 +static const struct v4l2_ctrl_ops ov10635_ctrl_ops = {
@@ -516,15 +576,35 @@ index 0000000..23e70fd
 +
 +	v4l2_i2c_subdev_init(&priv->sd, client, &ov10635_subdev_ops);
 +
++	priv->width = OV10635_MAX_WIDTH;
++	priv->height = OV10635_MAX_HEIGHT;
++	priv->fps_denominator = 30;
++
++	ret = ov10635_initialize(client);
++	if (ret < 0)
++		goto err_init;
++
 +	v4l2_ctrl_handler_init(&priv->hdl, 4);
 +	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
-+			  V4L2_CID_BRIGHTNESS, 0, 255, 1, 0);
++			  V4L2_CID_BRIGHTNESS, 0, 0xff, 1, 0x40);
 +	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
-+			  V4L2_CID_CONTRAST, 0, 255, 1, 0);
++			  V4L2_CID_CONTRAST, 0, 4, 1, 2);
 +	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
-+			  V4L2_CID_SATURATION, 0, 255, 1, 0);
++			  V4L2_CID_SATURATION, 0, 0xff, 1, 0xff);
 +	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
 +			  V4L2_CID_HUE, 0, 255, 1, 0);
++	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
++			  V4L2_CID_GAMMA, 0, 0xffff, 1, 0x233);
++	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
++			  V4L2_CID_AUTOGAIN, 0, 1, 1, 1);
++	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
++			  V4L2_CID_GAIN, 0, 0x3ff, 1, 0x10);
++	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
++			  V4L2_CID_EXPOSURE, 0, 0xffff, 1, 0x80);
++	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
++			  V4L2_CID_HFLIP, 0, 1, 1, 0);
++	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
++			  V4L2_CID_VFLIP, 0, 1, 1, 0);
 +	priv->sd.ctrl_handler = &priv->hdl;
 +
 +	ret = priv->hdl.error;
@@ -532,14 +612,6 @@ index 0000000..23e70fd
 +		goto cleanup;
 +
 +	v4l2_ctrl_handler_setup(&priv->hdl);
-+
-+	priv->width = OV10635_MAX_WIDTH;
-+	priv->height = OV10635_MAX_HEIGHT;
-+	priv->fps_denominator = 30;
-+
-+	ret = ov10635_initialize(client);
-+	if (ret < 0)
-+		goto cleanup;
 +
 +	if (device_create_file(&client->dev, &dev_attr_otp_id) != 0) {
 +		dev_err(&client->dev, "sysfs otp_id entry creation failed\n");
@@ -550,6 +622,7 @@ index 0000000..23e70fd
 +
 +cleanup:
 +	v4l2_ctrl_handler_free(&priv->hdl);
++err_init:
 +	v4l2_device_unregister_subdev(&priv->sd);
 +	v4l_err(client, "failed to probe @ 0x%02x (%s)\n",
 +		client->addr, client->adapter->name);
@@ -1428,10 +1501,10 @@ index 0000000..7479ae0
 +};
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_1280x800.h b/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_1280x800.h
 new file mode 100644
-index 0000000..b510c00
+index 0000000..135f29d
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_1280x800.h
-@@ -0,0 +1,1033 @@
+@@ -0,0 +1,1132 @@
 +/*
 + * OmniVision ov10635 sensor camera wizard 1280x800@30/UYVY/BT656/8bit
 + *
@@ -2065,7 +2138,7 @@ index 0000000..b510c00
 +{0x5001, 0xBF},
 +{0x5002, 0x7E},
 +{0x503D, 0x00},
-+{0xC450, 0x01},
++{0xC450, 0x01}, /* AA mode */
 +{0xC452, 0x04},
 +{0xC453, 0x00},
 +{0xC454, 0x00},
@@ -2242,8 +2315,8 @@ index 0000000..b510c00
 +{0xC312, 0xFF},
 +{0xC313, 0x08},
 +{0xC314, 0x01},
-+{0xC315, 0x7F},
-+{0xC316, 0xFF},
++{0xC315, 0x00}, /* min saturation gain */
++{0xC316, 0xFF}, /* max saturation gain */
 +{0xC317, 0x0B},
 +{0xC318, 0x00},
 +{0xC319, 0x0C},
@@ -2464,6 +2537,105 @@ index 0000000..b510c00
 +{0x301b, 0xf0},
 +{0x301c, 0xf0},
 +{0x301a, 0xf0},
++};
++
++static const struct ov10635_reg ov10635_regs_contrast[5][18] = {
++{
++	{0x6f00, 0xc3},
++	{0xc4e4, 0x20},
++	{0xc4e5, 0x40},
++	{0xc4e6, 0x60},
++	{0xc4e7, 0x80},
++	{0xc4e8, 0xa0},
++	{0xc4e9, 0xb4},
++	{0xc4ea, 0xc0},
++	{0xc4eb, 0xcb},
++	{0xc4ec, 0xd5},
++	{0xc4ed, 0xde},
++	{0xc4ee, 0xe6},
++	{0xc4ef, 0xed},
++	{0xc4f0, 0xf3},
++	{0xc4f1, 0xf8},
++	{0xc4f2, 0xfc},
++	{0x6f00, 0x03},
++	{0x6f00, 0x43},
++}, {
++	{0x6f00, 0xc3},
++	{0xc4e4, 0x18},
++	{0xc4e5, 0x30},
++	{0xc4e6, 0x48},
++	{0xc4e7, 0x60},
++	{0xc4e8, 0x78},
++	{0xc4e9, 0x90},
++	{0xc4ea, 0xa4},
++	{0xc4eb, 0xb4},
++	{0xc4ec, 0xc2},
++	{0xc4ed, 0xcf},
++	{0xc4ee, 0xdb},
++	{0xc4ef, 0xe5},
++	{0xc4f0, 0xee},
++	{0xc4f1, 0xf6},
++	{0xc4f2, 0xfc},
++	{0x6f00, 0x03},
++	{0x6f00, 0x43},
++}, {
++	{0x6f00, 0xc3},
++	{0xc4e4, 0x10},
++	{0xc4e5, 0x20},
++	{0xc4e6, 0x30},
++	{0xc4e7, 0x40},
++	{0xc4e8, 0x50},
++	{0xc4e9, 0x60},
++	{0xc4ea, 0x70},
++	{0xc4eb, 0x80},
++	{0xc4ec, 0x90},
++	{0xc4ed, 0xa0},
++	{0xc4ee, 0xb0},
++	{0xc4ef, 0xc0},
++	{0xc4f0, 0xd0},
++	{0xc4f1, 0xe0},
++	{0xc4f2, 0xf0},
++	{0x6f00, 0x03},
++	{0x6f00, 0x43},
++}, {
++	{0x6f00, 0xc3},
++	{0xc4e4, 0x0c},
++	{0xc4e5, 0x18},
++	{0xc4e6, 0x24},
++	{0xc4e7, 0x30},
++	{0xc4e8, 0x3c},
++	{0xc4e9, 0x48},
++	{0xc4ea, 0x54},
++	{0xc4eb, 0x62},
++	{0xc4ec, 0x72},
++	{0xc4ed, 0x84},
++	{0xc4ee, 0x94},
++	{0xc4ef, 0xa6},
++	{0xc4f0, 0xb9},
++	{0xc4f1, 0xcd},
++	{0xc4f2, 0xe2},
++	{0x6f00, 0x03},
++	{0x6f00, 0x43},
++}, {
++	{0x6f00, 0xc3},
++	{0xc4e4, 0x06},
++	{0xc4e5, 0x0d},
++	{0xc4e6, 0x15},
++	{0xc4e7, 0x1e},
++	{0xc4e8, 0x28},
++	{0xc4e9, 0x32},
++	{0xc4ea, 0x3c},
++	{0xc4eb, 0x48},
++	{0xc4ec, 0x56},
++	{0xc4ed, 0x66},
++	{0xc4ee, 0x78},
++	{0xc4ef, 0x8c},
++	{0xc4f0, 0xa2},
++	{0xc4f1, 0xba},
++	{0xc4f2, 0xd4},
++	{0x6f00, 0x03},
++	{0x6f00, 0x43},
++}
 +};
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_debug_fps.h b/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_debug_fps.h
 new file mode 100644
