@@ -35,7 +35,7 @@ new file mode 100644
 index 0000000..062b2f7
 --- /dev/null
 +++ b/arch/arm/boot/dts/r8a7790-stout-had.dts
-@@ -0,0 +1,641 @@
+@@ -0,0 +1,644 @@
 +/*
 + * Device Tree Source for the R8A7790-stout-had board
 + *
@@ -668,6 +668,9 @@ index 0000000..062b2f7
 +	pinctrl-0 = <&can0_pins>;
 +	pinctrl-names = "default";
 +	renesas,can-clock-select = <0x0>;
++	gpios = <&gpio5 29 GPIO_ACTIVE_HIGH /* enable */
++		 &gpio5 30 GPIO_ACTIVE_LOW /* standby */
++		>;
 +	status = "okay";
 +};
 +

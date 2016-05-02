@@ -170,6 +170,7 @@ SRC_URI_append_lcb = " \
     file://0037-ravb-Add-fixed-link-support.patch \
     file://0038-sh-eth-Add-fixed-link-support.patch \
     file://0039-spi-sh-msiof-fix-incorrect-udelay.patch \
+    file://0040-can-rcar_can-add-enable-and-standby-control-pins.patch \
 "
 
 SRC_URI_append_porter = " file://porter.cfg"
