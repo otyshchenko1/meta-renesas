@@ -20,7 +20,7 @@ index 002d844..03553b2 100644
  			    <0x0> (default) : Peripheral clock (clkp1)
  			    <0x1> : Peripheral clock (clkp2)
  			    <0x3> : Externally input clock
-+- gpios: GPIO used for controlling the reset pin and standby pin
++- gpios: GPIO used for controlling the enable pin and standby pin
  
  Example
  -------
