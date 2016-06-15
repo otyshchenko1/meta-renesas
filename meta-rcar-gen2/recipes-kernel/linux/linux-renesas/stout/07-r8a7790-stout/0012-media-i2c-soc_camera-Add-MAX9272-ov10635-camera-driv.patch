@@ -158,7 +158,7 @@ index 0000000..d36ef19
 +		maxim_reg8_write(client, 0x04, 0x83);	/* enable reverse_control/serial_link */
 +		client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAMx */
 +		/* Disable reverse_control is required for cascaded chips scheme */
-+		maxim_reg8_write(client, 0x04, 0x80);	/* disable reverse_control, enable serial_link */
++		maxim_reg8_write(client, 0x04, 0x83);	/* enable reverse_control/serial_link */
 +		mdelay(5);				/* wait 2ms after changing reverse_control */
 +		client->addr = tmp_addr;
 +	}
