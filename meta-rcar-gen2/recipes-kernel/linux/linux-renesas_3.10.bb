@@ -10,9 +10,9 @@ COMPATIBLE_MACHINE = "(alt|gose|koelsch|lager|porter|silk|stout)"
 PV_append = "+git${SRCREV}"
 
 RENESAS_BACKPORTS_URL="git://git.kernel.org/pub/scm/linux/kernel/git/horms/renesas-backport.git"
-SRCREV = "165e12ce2d7839e755debbec78dfa43b54345275"
+SRCREV = "34547b2a5032ce6dca24b745d608d2f3baac187f"
 SRC_URI = " \
-    ${RENESAS_BACKPORTS_URL};protocol=git;branch=bsp/v3.10.31-ltsi/rcar-gen2-1.9.7 \
+    ${RENESAS_BACKPORTS_URL};protocol=git;branch=bsp/v3.10.31-ltsi/rcar-gen2-1.9.8 \
     file://0001-arm-lager-Add-vmalloc-384M-to-bootargs-of-DTS.patch \
     file://0001-arm-koelsch-Add-vmalloc-384M-to-bootargs-of-DTS.patch \
     file://0001-arm-alt-Add-vmalloc-384M-to-bootargs-of-DTS.patch \
@@ -169,7 +169,7 @@ SRC_URI_append_lcb = " \
     file://fixed_phy/0022-of-mdio-export-of_mdio_parse_addr.patch \
     file://0037-ravb-Add-fixed-link-support.patch \
     file://0038-sh-eth-Add-fixed-link-support.patch \
-    file://0039-spi-sh-msiof-fix-incorrect-udelay.patch \
+    file://0039-spi-sh-msiof-speed-up-polling.patch \
     file://0040-can-rcar_can-add-enable-and-standby-control-pins.patch \
 "
 
