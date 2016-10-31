@@ -9,13 +9,13 @@ Signed-off-by: Vladimir Barinov <vladimir.barinov@cogentembedded.com>
 ---
  drivers/media/i2c/soc_camera/Kconfig               |    7 +
  drivers/media/i2c/soc_camera/Makefile              |    1 +
- drivers/media/i2c/soc_camera/max9272_ov10635.c     |  611 +++++++++++
+ drivers/media/i2c/soc_camera/max9272_ov10635.c     |  624 +++++++++++
  drivers/media/i2c/soc_camera/max9272_ov10635.h     |  241 +++++
  .../media/i2c/soc_camera/max9272_ov10635_setup.c   |  207 ++++
  .../media/i2c/soc_camera/max9272_ov10635_wizard.h  |  364 +++++++
  .../soc_camera/max9272_ov10635_wizard_1280x800.h   | 1132 ++++++++++++++++++++
  .../soc_camera/max9272_ov10635_wizard_debug_fps.h  |  291 +++++
- 8 files changed, 2854 insertions(+)
+ 8 files changed, 2867 insertions(+)
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.c
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635.h
  create mode 100644 drivers/media/i2c/soc_camera/max9272_ov10635_setup.c
@@ -54,10 +54,10 @@ index f3d3403..d1b00b5 100644
  obj-$(CONFIG_SOC_CAMERA_TW9910)		+= tw9910.o
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635.c b/drivers/media/i2c/soc_camera/max9272_ov10635.c
 new file mode 100644
-index 0000000..d36ef19
+index 0000000..a792c07
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635.c
-@@ -0,0 +1,620 @@
+@@ -0,0 +1,624 @@
 +/*
 + * MAXIM max9272-max9271 with OmniVision ov10635 sensor camera driver
 + *
@@ -105,6 +105,8 @@ index 0000000..d36ef19
 +	int				width;
 +	int				height;
 +	int				fps_denominator;
++	int				init_complete;
++	u8				id[5];
 +};
 +
 +static inline struct ov10635_priv *to_ov10635(const struct i2c_client *client)
@@ -135,34 +137,6 @@ index 0000000..d36ef19
 +
 +static int ov10635_s_stream(struct v4l2_subdev *sd, int enable)
 +{
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	int cam_idx = client->addr - 0x31;
-+	int tmp_addr;
-+
-+	/* switch to GMSL conf_link to access sensor registers */
-+	tmp_addr = client->addr;
-+	client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAMx */
-+	maxim_reg8_write(client, 0x04, 0x43);	/* enable reverse_control/conf_link */
-+	mdelay(5);				/* wait 5ms for conf_link to establish */
-+	client->addr = maxim_map[1][cam_idx];	/* MAX9271-CAMx */
-+	maxim_reg8_write(client, 0x04, 0x43);	/* enable reverse_control/conf_link */
-+	mdelay(5);				/* wait 5ms for conf_link to establish */
-+	client->addr = tmp_addr;
-+
-+	maxim_reg16_write(client, 0x0100, enable); /* stream on/off */
-+
-+	if (enable) {
-+		/* switch to GMSL serial_link for streaming video */
-+		tmp_addr = client->addr;
-+		client->addr = maxim_map[1][cam_idx];	/* MAX9271-CAMx */
-+		maxim_reg8_write(client, 0x04, 0x83);	/* enable reverse_control/serial_link */
-+		client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAMx */
-+		/* Disable reverse_control is required for cascaded chips scheme */
-+		maxim_reg8_write(client, 0x04, 0x83);	/* enable reverse_control/serial_link */
-+		mdelay(5);				/* wait 2ms after changing reverse_control */
-+		client->addr = tmp_addr;
-+	}
-+
 +	return 0;
 +}
 +
@@ -385,8 +359,12 @@ index 0000000..d36ef19
 +{
 +	struct v4l2_subdev *sd = to_sd(ctrl);
 +	struct i2c_client *client = v4l2_get_subdevdata(sd);
++	struct ov10635_priv *priv = to_ov10635(client);
 +	int ret = -EINVAL;
-+	u8 val;
++	u8 val = 0;
++
++	if (!priv->init_complete)
++		return 0;
 +
 +	switch (ctrl->id) {
 +	case V4L2_CID_BRIGHTNESS:
@@ -394,6 +372,7 @@ index 0000000..d36ef19
 +		ret = maxim_reg16_write(client, 0xc46a, ctrl->val);
 +		break;
 +	case V4L2_CID_CONTRAST:
++		udelay(100);
 +		ret = ov10635_set_regs(client, &ov10635_regs_contrast[ctrl->val][0], 18);
 +		break;
 +	case V4L2_CID_SATURATION:
@@ -433,7 +412,6 @@ index 0000000..d36ef19
 +		else
 +			val &= ~0x3;
 +		ret = maxim_reg16_write(client, 0x381d, val);
-+		break;
 +		/* when mirror mode is on, register 0x6900[0] needs to be set to 0x01 in order to ensure correct color output */
 +		ret = maxim_reg16_read(client, 0x6900, &val);
 +		if (ret < 0)
@@ -443,6 +421,7 @@ index 0000000..d36ef19
 +		else
 +			val &= ~0x1;
 +		ret = maxim_reg16_write(client, 0x6900, val);
++		break;
 +	case V4L2_CID_VFLIP:
 +		ret = maxim_reg16_read(client, 0x381c, &val);
 +		if (ret < 0)
@@ -481,15 +460,13 @@ index 0000000..d36ef19
 +	.video	= &ov10635_video_ops,
 +};
 +
-+static ssize_t
-+ov10635_otp_id_read(struct device *dev, struct device_attribute *attr, char *buf)
++static void ov10635_otp_id_read(struct i2c_client *client)
 +{
-+	struct v4l2_subdev *sd = i2c_get_clientdata(to_i2c_client(dev));
-+	struct i2c_client *client = v4l2_get_subdevdata(sd);
-+	u8 id[5];
++	struct ov10635_priv *priv = to_ov10635(client);
 +	int i;
 +
 +	/* read camera id from OTP memory */
++#if 0 /* disable/reset OTP makes worse: colors become incorect randomly */
 +	maxim_reg16_write(client, 0x100, 1);
 +	for (i = 0; i < 5; i++)
 +		maxim_reg16_write(client, 0x3d00 + i, 0x00);
@@ -498,11 +475,24 @@ index 0000000..d36ef19
 +	mdelay(15);
 +	for (i = 0; i < 5; i++)
 +		maxim_reg16_read(client, 0x3d00 + i, &id[i]);
-+	return snprintf(buf, 32, "%02x:%02x:%02x:%02x:%02x\n",
-+		 id[0], id[1], id[2], id[3], id[4]);
++#else
++	maxim_reg16_write(client, 0x3d10, 1);
++	for (i = 0; i < 5; i++)
++		maxim_reg16_read(client, 0x3d00 + i, &priv->id[i]);
++#endif
 +}
 +
-+static DEVICE_ATTR(otp_id, S_IRUGO, ov10635_otp_id_read, NULL);
++static ssize_t ov10635_otp_id_show(struct device *dev, struct device_attribute *attr, char *buf)
++{
++	struct v4l2_subdev *sd = i2c_get_clientdata(to_i2c_client(dev));
++	struct i2c_client *client = v4l2_get_subdevdata(sd);
++	struct ov10635_priv *priv = to_ov10635(client);
++
++	return snprintf(buf, 32, "%02x:%02x:%02x:%02x:%02x\n",
++			priv->id[0], priv->id[1], priv->id[2], priv->id[3], priv->id[4]);
++}
++
++static DEVICE_ATTR(otp_id, S_IRUGO, ov10635_otp_id_show, NULL);
 +
 +#ifdef OV10635_WIZARD_DEBUG_FPS
 +#include "max9272_ov10635_wizard_debug_fps.h"
@@ -510,6 +500,7 @@ index 0000000..d36ef19
 +
 +static int ov10635_initialize(struct i2c_client *client)
 +{
++	struct ov10635_priv *priv = to_ov10635(client);
 +	u8 pid, ver;
 +	int ret;
 +	int tmp_addr, cam_idx;
@@ -534,9 +525,6 @@ index 0000000..d36ef19
 +		dev_err(&client->dev, "Product ID error %x:%x\n", pid, ver);
 +		return -ENODEV;
 +	}
-+
-+	dev_info(&client->dev, "ov10635 Product ID %x Manufacturer ID %x\n",
-+		 pid, ver);
 +
 +#if !defined(MAXIM_IMI_MCU_POWERED)
 +#if 0
@@ -563,6 +551,20 @@ index 0000000..d36ef19
 +	if (ret)
 +		return ret;
 +#endif
++	ov10635_otp_id_read(client);
++
++	dev_info(&client->dev, "ov10635 Product ID %x Manufacturer ID %x OTP_ID %02x:%02x:%02x:%02x:%02x\n",
++		 pid, ver, priv->id[0], priv->id[1], priv->id[2], priv->id[3], priv->id[4]);
++
++	/* switch to GMSL serial_link for streaming video */
++	tmp_addr = client->addr;
++	client->addr = maxim_map[1][cam_idx];	/* MAX9271-CAMx */
++	maxim_reg8_write(client, 0x04, 0x83);	/* enable reverse_control/serial_link */
++	mdelay(2);				/* wait 2ms after changing reverse_control */
++	client->addr = maxim_map[0][cam_idx];	/* MAX9272-CAMx */
++	maxim_reg8_write(client, 0x04, 0x83);	/* enable reverse_control/serial_link */
++	mdelay(2);				/* wait 2ms after changing reverse_control */
++	client->addr = tmp_addr;
 +
 +	return 0;
 +}
@@ -595,7 +597,7 @@ index 0000000..d36ef19
 +
 +	v4l2_ctrl_handler_init(&priv->hdl, 4);
 +	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
-+			  V4L2_CID_BRIGHTNESS, 0, 0xff, 1, 0x40);
++			  V4L2_CID_BRIGHTNESS, 0, 0xff, 1, 0x30);
 +	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
 +			  V4L2_CID_CONTRAST, 0, 4, 1, 2);
 +	v4l2_ctrl_new_std(&priv->hdl, &ov10635_ctrl_ops,
@@ -626,6 +628,8 @@ index 0000000..d36ef19
 +		dev_err(&client->dev, "sysfs otp_id entry creation failed\n");
 +		goto cleanup;
 +	}
++
++	priv->init_complete = 1;
 +
 +	return 0;
 +
@@ -1510,7 +1514,7 @@ index 0000000..7479ae0
 +};
 diff --git a/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_1280x800.h b/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_1280x800.h
 new file mode 100644
-index 0000000..135f29d
+index 0000000..5af5e6f
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635_wizard_1280x800.h
 @@ -0,0 +1,1132 @@
@@ -2225,7 +2229,7 @@ index 0000000..135f29d
 +{0xC4B5, 0x01},
 +{0xC4B6, 0x00},
 +{0xC4B7, 0x01},
-+{0xC4B8, 0x01}, /* Color temperature AWB algorithms enable */
++{0xC4B8, 0x00}, /* Color temperature AWB algorithms disable */
 +{0xC4B9, 0x01},
 +{0xC4BA, 0x01},
 +{0xC4BB, 0x00},
