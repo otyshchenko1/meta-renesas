@@ -57,7 +57,7 @@ new file mode 100644
 index 0000000..a792c07
 --- /dev/null
 +++ b/drivers/media/i2c/soc_camera/max9272_ov10635.c
-@@ -0,0 +1,624 @@
+@@ -0,0 +1,615 @@
 +/*
 + * MAXIM max9272-max9271 with OmniVision ov10635 sensor camera driver
 + *
@@ -412,15 +412,6 @@ index 0000000..a792c07
 +		else
 +			val &= ~0x3;
 +		ret = maxim_reg16_write(client, 0x381d, val);
-+		/* when mirror mode is on, register 0x6900[0] needs to be set to 0x01 in order to ensure correct color output */
-+		ret = maxim_reg16_read(client, 0x6900, &val);
-+		if (ret < 0)
-+			return ret;
-+		if (ctrl->val)
-+			val |= 0x1;
-+		else
-+			val &= ~0x1;
-+		ret = maxim_reg16_write(client, 0x6900, val);
 +		break;
 +	case V4L2_CID_VFLIP:
 +		ret = maxim_reg16_read(client, 0x381c, &val);
