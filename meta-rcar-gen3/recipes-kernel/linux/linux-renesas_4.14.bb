@@ -20,6 +20,7 @@ SRC_URI_append = " \
     file://0001-Revert-mmc-renesas_sdhi_internal_dmac-limit-DMA-RX-f.patch \
     file://0001-r8a7795-h3ulcb-Fix-dclkin.2-clock.patch \
     file://0001-Modify-ulcb.dtsi-to-fit-Backplane-extension-board-co.patch \
+    file://0001-Modify-H3ULCB-device-tree-to-be-able-to-run-under-Xe.patch \
 "
 
 LINUX_VERSION ?= "4.14.35"
