@@ -1,0 +1,45 @@
+From cad2130a58845ec9eed6e3d3b14f4493e8258af9 Mon Sep 17 00:00:00 2001
+From: Oleksandr Tyshchenko <oleksandr_tyshchenko@epam.com>
+Date: Mon, 16 Jul 2018 13:09:16 +0300
+Subject: [PATCH 1/6] Modify Stout device tree to fit Backplane board
+ connections
+
+Signed-off-by: Oleksandr Tyshchenko <oleksandr_tyshchenko@epam.com>
+---
+ arch/arm/boot/dts/r8a7790-stout-full.dts | 9 +++++++--
+ 1 file changed, 7 insertions(+), 2 deletions(-)
+
+diff --git a/arch/arm/boot/dts/r8a7790-stout-full.dts b/arch/arm/boot/dts/r8a7790-stout-full.dts
+index dbfde27..bf1f943 100644
+--- a/arch/arm/boot/dts/r8a7790-stout-full.dts
++++ b/arch/arm/boot/dts/r8a7790-stout-full.dts
+@@ -455,7 +455,8 @@
+ */
+ 
+ 	renesas,no-ether-link;
+-	renesas,phy = <7>;
++	renesas,phy = <4>;
++	renesas,phy_alt = <0>;
+ 	phy-int-gpio = <&gpio2 15 GPIO_ACTIVE_LOW>;
+ 	status = "okay";
+ };
+@@ -725,7 +726,7 @@
+ };
+ 
+ &pciec {
+-	status = "okay";
++	/*status = "okay";*/
+ };
+ 
+ &can0 {
+@@ -773,3 +774,7 @@
+ 	pinctrl-names = "default";
+ 	status = "okay";
+ };
++
++&sata1 {
++	status = "okay";
++};
+-- 
+2.7.4
+

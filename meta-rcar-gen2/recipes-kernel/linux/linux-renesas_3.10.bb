@@ -171,6 +171,8 @@ SRC_URI_append_lcb = " \
     file://0038-sh-eth-Add-fixed-link-support.patch \
     file://0039-spi-sh-msiof-speed-up-polling.patch \
     file://0040-can-rcar_can-add-enable-and-standby-control-pins.patch \
+    file://stout/07-r8a7790-stout/0001-Modify-Stout-device-tree-to-fit-Backplane-board-conn.patch \
+    file://stout/07-r8a7790-stout/0002-ethernet-ravb-Alternative-PHY-MDIO-address-might-be-.patch \
 "
 
 SRC_URI_append_porter = " file://porter.cfg"
