@@ -1,0 +1,252 @@
+From cf78e7c8b04c56d32bfd5ca2c3cfdd68bb0e3863 Mon Sep 17 00:00:00 2001
+From: Andre Przywara <andre.przywara@linaro.org>
+Date: Thu, 19 Sep 2013 18:06:45 +0200
+Subject: [PATCH 07/18] ARM: extend non-secure switch to also go into HYP mode
+
+For the KVM and XEN hypervisors to be usable, we need to enter the
+kernel in HYP mode. Now that we already are in non-secure state,
+HYP mode switching is within short reach.
+
+While doing the non-secure switch, we have to enable the HVC
+instruction and setup the HYP mode HVBAR (while still secure).
+
+The actual switch is done by dropping back from a HYP mode handler
+without actually leaving HYP mode, so we introduce a new handler
+routine in our new secure exception vector table.
+
+In the assembly switching routine we save and restore the banked LR
+and SP registers around the hypercall to do the actual HYP mode
+switch.
+
+The C routine first checks whether we are in HYP mode already and
+also whether the virtualization extensions are available. It also
+checks whether the HYP mode switch was finally successful.
+The bootm command part only calls the new function after the
+non-secure switch.
+
+Signed-off-by: Andre Przywara <andre.przywara@linaro.org>
+---
+ arch/arm/cpu/armv7/Makefile      |  2 +-
+ arch/arm/cpu/armv7/nonsec_virt.S | 43 +++++++++++++++++++++++++++++++++++-----
+ arch/arm/cpu/armv7/virt-v7.c     | 37 ++++++++++++++++++++++++++++++++++
+ arch/arm/include/asm/armv7.h     |  6 ++++--
+ arch/arm/lib/bootm.c             |  7 ++++++-
+ 5 files changed, 86 insertions(+), 9 deletions(-)
+
+diff --git a/arch/arm/cpu/armv7/Makefile b/arch/arm/cpu/armv7/Makefile
+index d3e6e82..a57ff9c 100644
+--- a/arch/arm/cpu/armv7/Makefile
++++ b/arch/arm/cpu/armv7/Makefile
+@@ -36,7 +36,7 @@ ifneq ($(CONFIG_AM33XX)$(CONFIG_OMAP44XX)$(CONFIG_OMAP54XX)$(CONFIG_TEGRA20),)
+ SOBJS	+= lowlevel_init.o
+ endif
+ 
+-ifneq ($(CONFIG_ARMV7_NONSEC),)
++ifneq ($(CONFIG_ARMV7_NONSEC)$(CONFIG_ARMV7_VIRT),)
+ SOBJS	+= nonsec_virt.o
+ COBJS	+= virt-v7.o
+ endif
+diff --git a/arch/arm/cpu/armv7/nonsec_virt.S b/arch/arm/cpu/armv7/nonsec_virt.S
+index cbee8f7..358348f 100644
+--- a/arch/arm/cpu/armv7/nonsec_virt.S
++++ b/arch/arm/cpu/armv7/nonsec_virt.S
+@@ -1,5 +1,5 @@
+ /*
+- * code for switching cores into non-secure state
++ * code for switching cores into non-secure state and into HYP mode
+  *
+  * Copyright (c) 2013	Andre Przywara <andre.przywara@linaro.org>
+  *
+@@ -28,15 +28,16 @@
+ #include <asm/armv7.h>
+ 
+ .arch_extension sec
++.arch_extension virt
+ 
+-/* the vector table for secure state */
++/* the vector table for secure state and HYP mode */
+ _monitor_vectors:
+ 	.word 0	/* reset */
+ 	.word 0 /* undef */
+ 	adr pc, _secure_monitor
+ 	.word 0
+ 	.word 0
+-	.word 0
++	adr pc, _hyp_trap
+ 	.word 0
+ 	.word 0
+ 
+@@ -53,10 +54,27 @@ _secure_monitor:
+ 	bic	r1, r1, #0x4e			@ clear IRQ, FIQ, EA, nET bits
+ 	orr	r1, r1, #0x31			@ enable NS, AW, FW bits
+ 
++#ifdef CONFIG_ARMV7_VIRT
++	mrc	p15, 0, r0, c0, c1, 1		@ read ID_PFR1
++	and	r0, r0, #CPUID_ARM_VIRT_MASK	@ mask virtualization bits
++	cmp	r0, #(1 << CPUID_ARM_VIRT_SHIFT)
++	orreq	r1, r1, #0x100			@ allow HVC instruction
++#endif
++
+ 	mcr	p15, 0, r1, c1, c1, 0		@ write SCR (with NS bit set)
+ 
++#ifdef CONFIG_ARMV7_VIRT
++	mrceq	p15, 0, r0, c12, c0, 1		@ get MVBAR value
++	mcreq	p15, 4, r0, c12, c0, 0		@ write HVBAR
++#endif
++
+ 	movs	pc, lr				@ return to non-secure SVC
+ 
++_hyp_trap:
++	mrs	lr, elr_hyp	@ for older asm: .byte 0x00, 0xe3, 0x0e, 0xe1
++	mov pc, lr				@ do no switch modes, but
++						@ return to caller
++
+ /*
+  * Secondary CPUs start here and call the code for the core specific parts
+  * of the non-secure and HYP mode transition. The GIC distributor specific
+@@ -71,9 +89,13 @@ ENTRY(_smp_pen)
+ 	mcr	p15, 0, r1, c12, c0, 0		@ set VBAR
+ 
+ 	bl	_nonsec_init
++	mov	r12, r0				@ save GICC address
++#ifdef CONFIG_ARMV7_VIRT
++	bl	_switch_to_hyp
++#endif
+ 
+-	ldr	r1, [r0, #GICC_IAR]		@ acknowledge IPI
+-	str	r1, [r0, #GICC_EOIR]		@ signal end of interrupt
++	ldr	r1, [r12, #GICC_IAR]		@ acknowledge IPI
++	str	r1, [r12, #GICC_EOIR]		@ signal end of interrupt
+ 
+ 	adr	r0, _smp_pen			@ do not use this address again
+ 	b	smp_waitloop			@ wait for IPIs, board specific
+@@ -173,3 +195,14 @@ ENTRY(smp_waitloop)
+ ENDPROC(smp_waitloop)
+ .weak smp_waitloop
+ #endif
++
++ENTRY(_switch_to_hyp)
++	mov	r0, lr
++	mov	r1, sp				@ save SVC copy of LR and SP
++	isb
++	hvc #0			 @ for older asm: .byte 0x70, 0x00, 0x40, 0xe1
++	mov	sp, r1
++	mov	lr, r0				@ restore SVC copy of LR and SP
++
++	bx	lr
++ENDPROC(_switch_to_hyp)
+diff --git a/arch/arm/cpu/armv7/virt-v7.c b/arch/arm/cpu/armv7/virt-v7.c
+index a0b8742..6de7fe7 100644
+--- a/arch/arm/cpu/armv7/virt-v7.c
++++ b/arch/arm/cpu/armv7/virt-v7.c
+@@ -3,6 +3,7 @@
+  * Andre Przywara, Linaro
+  *
+  * Routines to transition ARMv7 processors from secure into non-secure state
++ * and from non-secure SVC into HYP mode
+  * needed to enable ARMv7 virtualization for current hypervisors
+  *
+  * See file CREDITS for list of people who contributed to this
+@@ -31,6 +32,14 @@
+ 
+ unsigned long gic_dist_addr;
+ 
++static unsigned int read_cpsr(void)
++{
++	unsigned int reg;
++
++	asm volatile ("mrs %0, cpsr\n" : "=r" (reg));
++	return reg;
++}
++
+ static unsigned int read_id_pfr1(void)
+ {
+ 	unsigned int reg;
+@@ -90,6 +99,34 @@ void __weak smp_kick_all_cpus(void)
+ 	kick_secondary_cpus_gic(gic_dist_addr);
+ }
+ 
++int armv7_switch_hyp(void)
++{
++	unsigned int reg;
++
++	/* check whether we are in HYP mode already */
++	if ((read_cpsr() & 0x1f) == 0x1a) {
++		debug("CPU already in HYP mode\n");
++		return 0;
++	}
++
++	/* check whether the CPU supports the virtualization extensions */
++	reg = read_id_pfr1();
++	if ((reg & CPUID_ARM_VIRT_MASK) != 1 << CPUID_ARM_VIRT_SHIFT) {
++		printf("HYP mode: Virtualization extensions not implemented.\n");
++		return -1;
++	}
++
++	/* call the HYP switching code on this CPU also */
++	_switch_to_hyp();
++
++	if ((read_cpsr() & 0x1F) != 0x1a) {
++		printf("HYP mode: switch not successful.\n");
++		return -1;
++	}
++
++	return 0;
++}
++
+ int armv7_switch_nonsec(void)
+ {
+ 	unsigned int reg;
+diff --git a/arch/arm/include/asm/armv7.h b/arch/arm/include/asm/armv7.h
+index d7b85c8..e863908 100644
+--- a/arch/arm/include/asm/armv7.h
++++ b/arch/arm/include/asm/armv7.h
+@@ -101,14 +101,16 @@ void v7_outer_cache_inval_all(void);
+ void v7_outer_cache_flush_range(u32 start, u32 end);
+ void v7_outer_cache_inval_range(u32 start, u32 end);
+ 
+-#ifdef CONFIG_ARMV7_NONSEC
++#if defined(CONFIG_ARMV7_NONSEC) || defined(CONFIG_ARMV7_VIRT)
+ 
+ int armv7_switch_nonsec(void);
++int armv7_switch_hyp(void);
+ 
+ /* defined in assembly file */
+ unsigned int _nonsec_init(void);
+ void _smp_pen(void);
+-#endif /* CONFIG_ARMV7_NONSEC */
++void _switch_to_hyp(void);
++#endif /* CONFIG_ARMV7_NONSEC || CONFIG_ARMV7_VIRT */
+ 
+ #endif /* ! __ASSEMBLY__ */
+ 
+diff --git a/arch/arm/lib/bootm.c b/arch/arm/lib/bootm.c
+index 039eb1d..6923a61 100644
+--- a/arch/arm/lib/bootm.c
++++ b/arch/arm/lib/bootm.c
+@@ -36,7 +36,7 @@
+ #include <asm/bootm.h>
+ #include <linux/compiler.h>
+ 
+-#ifdef CONFIG_ARMV7_NONSEC
++#if defined(CONFIG_ARMV7_NONSEC) || defined(CONFIG_ARMV7_VIRT)
+ #include <asm/armv7.h>
+ #endif
+ 
+@@ -286,8 +286,13 @@ static void do_nonsec_virt_switch(void)
+ {
+ #if defined(CONFIG_ARMV7_NONSEC) || defined(CONFIG_ARMV7_VIRT)
+ 	if (armv7_switch_nonsec() == 0)
++#ifdef CONFIG_ARMV7_VIRT
++		if (armv7_switch_hyp() == 0)
++			debug("entered HYP mode\n");
++#else
+ 		debug("entered non-secure state\n");
+ #endif
++#endif
+ }
+ 
+ /* Subcommand: PREP */
+-- 
+2.7.4
+

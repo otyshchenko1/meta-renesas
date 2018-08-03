@@ -1,0 +1,163 @@
+From 0c75e3c8357d6a397a7d23ab3a5e1ceeb0c1ff33 Mon Sep 17 00:00:00 2001
+From: Andre Przywara <andre.przywara@linaro.org>
+Date: Thu, 19 Sep 2013 18:06:44 +0200
+Subject: [PATCH 06/18] ARM: add SMP support for non-secure switch
+
+Currently the non-secure switch is only done for the boot processor.
+To enable full SMP support, we have to switch all secondary cores
+into non-secure state also.
+
+So we add an entry point for secondary CPUs coming out of low-power
+state and make sure we put them into WFI again after having switched
+to non-secure state.
+For this we acknowledge and EOI the wake-up IPI, then go into WFI.
+Once being kicked out of it later, we sanity check that the start
+address has actually been changed (since another attempt to switch
+to non-secure would block the core) and jump to the new address.
+
+The actual CPU kick is done by sending an inter-processor interrupt
+via the GIC to all CPU interfaces except the requesting processor.
+The secondary cores will then setup their respective GIC CPU
+interface.
+While this approach is pretty universal across several ARMv7 boards,
+we make this function weak in case someone needs to tweak this for
+a specific board.
+
+The way of setting the secondary's start address is board specific,
+but mostly different only in the actual SMP pen address, so we also
+provide a weak default implementation and just depend on the proper
+address to be set in the config file.
+
+Signed-off-by: Andre Przywara <andre.przywara@linaro.org>
+---
+ arch/arm/cpu/armv7/nonsec_virt.S | 35 +++++++++++++++++++++++++++++++++++
+ arch/arm/cpu/armv7/virt-v7.c     | 16 +++++++++++++++-
+ arch/arm/include/asm/armv7.h     |  1 +
+ arch/arm/include/asm/gic.h       |  2 ++
+ include/common.h                 |  2 ++
+ 5 files changed, 55 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/cpu/armv7/nonsec_virt.S b/arch/arm/cpu/armv7/nonsec_virt.S
+index 3dd60b7..cbee8f7 100644
+--- a/arch/arm/cpu/armv7/nonsec_virt.S
++++ b/arch/arm/cpu/armv7/nonsec_virt.S
+@@ -58,6 +58,28 @@ _secure_monitor:
+ 	movs	pc, lr				@ return to non-secure SVC
+ 
+ /*
++ * Secondary CPUs start here and call the code for the core specific parts
++ * of the non-secure and HYP mode transition. The GIC distributor specific
++ * code has already been executed by a C function before.
++ * Then they go back to wfi and wait to be woken up by the kernel again.
++ */
++ENTRY(_smp_pen)
++	mrs	r0, cpsr
++	orr	r0, r0, #0xc0
++	msr	cpsr, r0			@ disable interrupts
++	ldr	r1, =_start
++	mcr	p15, 0, r1, c12, c0, 0		@ set VBAR
++
++	bl	_nonsec_init
++
++	ldr	r1, [r0, #GICC_IAR]		@ acknowledge IPI
++	str	r1, [r0, #GICC_EOIR]		@ signal end of interrupt
++
++	adr	r0, _smp_pen			@ do not use this address again
++	b	smp_waitloop			@ wait for IPIs, board specific
++ENDPROC(_smp_pen)
++
++/*
+  * Switch a core to non-secure state.
+  *
+  *  1. initialize the GIC per-core interface
+@@ -138,3 +160,16 @@ ENTRY(_nonsec_init)
+ 
+ 	bx	lr
+ ENDPROC(_nonsec_init)
++
++#ifdef CONFIG_SMP_PEN_ADDR
++/* void __weak smp_waitloop(unsigned previous_address); */
++ENTRY(smp_waitloop)
++	wfi
++	ldr	r1, =CONFIG_SMP_PEN_ADDR	@ load start address
++	ldr	r1, [r1]
++	cmp	r0, r1			@ make sure we dont execute this code
++	beq	smp_waitloop		@ again (due to a spurious wakeup)
++	mov	pc, r1
++ENDPROC(smp_waitloop)
++.weak smp_waitloop
++#endif
+diff --git a/arch/arm/cpu/armv7/virt-v7.c b/arch/arm/cpu/armv7/virt-v7.c
+index 068ac85..a0b8742 100644
+--- a/arch/arm/cpu/armv7/virt-v7.c
++++ b/arch/arm/cpu/armv7/virt-v7.c
+@@ -79,6 +79,17 @@ static unsigned long get_gicd_base_address(void)
+ #endif
+ }
+ 
++static void kick_secondary_cpus_gic(unsigned long gicdaddr)
++{
++	/* kick all CPUs (except this one) by writing to GICD_SGIR */
++	writel(1U << 24, gicdaddr + GICD_SGIR);
++}
++
++void __weak smp_kick_all_cpus(void)
++{
++	kick_secondary_cpus_gic(gic_dist_addr);
++}
++
+ int armv7_switch_nonsec(void)
+ {
+ 	unsigned int reg;
+@@ -115,7 +126,10 @@ int armv7_switch_nonsec(void)
+ 	for (i = 1; i <= itlinesnr; i++)
+ 		writel((unsigned)-1, gic_dist_addr + GICD_IGROUPRn + 4 * i);
+ 
+-	/* call the non-sec switching code on this CPU */
++	smp_set_core_boot_addr((unsigned long)_smp_pen, -1);
++	smp_kick_all_cpus();
++
++	/* call the non-sec switching code on this CPU also */
+ 	_nonsec_init();
+ 
+ 	return 0;
+diff --git a/arch/arm/include/asm/armv7.h b/arch/arm/include/asm/armv7.h
+index 53f753a..d7b85c8 100644
+--- a/arch/arm/include/asm/armv7.h
++++ b/arch/arm/include/asm/armv7.h
+@@ -107,6 +107,7 @@ int armv7_switch_nonsec(void);
+ 
+ /* defined in assembly file */
+ unsigned int _nonsec_init(void);
++void _smp_pen(void);
+ #endif /* CONFIG_ARMV7_NONSEC */
+ 
+ #endif /* ! __ASSEMBLY__ */
+diff --git a/arch/arm/include/asm/gic.h b/arch/arm/include/asm/gic.h
+index c2b1e28..a0891cc 100644
+--- a/arch/arm/include/asm/gic.h
++++ b/arch/arm/include/asm/gic.h
+@@ -13,5 +13,7 @@
+ #define GIC_CPU_OFFSET_A15	0x2000
+ #define GICC_CTLR		0x0000
+ #define GICC_PMR		0x0004
++#define GICC_IAR		0x000C
++#define GICC_EOIR		0x0010
+ 
+ #endif
+diff --git a/include/common.h b/include/common.h
+index 4ad17ea..c6c8721 100644
+--- a/include/common.h
++++ b/include/common.h
+@@ -589,6 +589,8 @@ void ft_pci_setup(void *blob, bd_t *bd);
+ #endif
+ #endif
+ 
++void smp_set_core_boot_addr(unsigned long addr, int corenr);
++void smp_kick_all_cpus(void);
+ 
+ /* $(CPU)/serial.c */
+ int	serial_init   (void);
+-- 
+2.7.4
+

@@ -26,4 +26,22 @@ SRC_URI_append_lcb = " \
     file://0009-arm-rmobile-Add-r8a7790-stout-board-support.patch \
     file://0010-Support-R-Car-Gen2-USB-PHY.patch \
     file://0011-enable-rmobile-usb-phy-on-silk.patch \
+    file://0001-ARM-prepare-armv7.h-to-be-included-from-assembly-sou.patch \
+    file://0002-ARM-add-secure-monitor-handler-to-switch-to-non-secu.patch \
+    file://0003-ARM-add-assembly-routine-to-switch-to-non-secure-sta.patch \
+    file://0004-ARM-add-C-function-to-switch-to-non-secure-state.patch \
+    file://0005-ARM-trigger-non-secure-state-switch-during-bootm-exe.patch \
+    file://0006-ARM-add-SMP-support-for-non-secure-switch.patch \
+    file://0007-ARM-extend-non-secure-switch-to-also-go-into-HYP-mod.patch \
+    file://0008-ARM-align-MVBAR-on-32-byte-boundary.patch \
+    file://0009-ARM-HYP-non-sec-move-switch-to-non-sec-to-the-last-b.patch \
+    file://0010-ARM-HYP-non-sec-add-a-barrier-after-setting-SCR.NS-1.patch \
+    file://0011-ARM-non-sec-reset-CNTVOFF-to-zero.patch \
+    file://0012-ARM-add-missing-HYP-mode-constant.patch \
+    file://0013-ARM-HYP-non-sec-remove-MIDR-check-to-validate-CBAR.patch \
+    file://0014-ARM-HYP-non-sec-allow-relocation-to-secure-RAM.patch \
+    file://0015-arm-rmobile-Add-support-of-starting-CPUs-in-Hypervis.patch \
+    file://0016-arm-rmobile-Add-timer-initialization.patch \
+    file://0017-ARM-HYP-non-sec-drop-arch-time-initialization.patch \
+    file://0018-Copy-lager-stuff-for-switching-A15-cores-to-HYP-mode.patch \
 "

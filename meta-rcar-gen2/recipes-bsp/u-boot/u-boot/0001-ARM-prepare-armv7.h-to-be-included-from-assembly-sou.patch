@@ -1,0 +1,47 @@
+From 6992129b8c265d7ac3d39158cc9d7c57cf0b16ae Mon Sep 17 00:00:00 2001
+From: Andre Przywara <andre.przywara@linaro.org>
+Date: Thu, 19 Sep 2013 18:06:39 +0200
+Subject: [PATCH 01/18] ARM: prepare armv7.h to be included from assembly
+ source
+
+armv7.h contains some useful constants, but also C prototypes.
+To include it also in assembly files, protect the non-assembly
+part appropriately.
+
+Signed-off-by: Andre Przywara <andre.przywara@linaro.org>
+---
+ arch/arm/include/asm/armv7.h | 6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/include/asm/armv7.h b/arch/arm/include/asm/armv7.h
+index 1e82224..2fa89d2 100644
+--- a/arch/arm/include/asm/armv7.h
++++ b/arch/arm/include/asm/armv7.h
+@@ -23,7 +23,6 @@
+  */
+ #ifndef ARMV7_H
+ #define ARMV7_H
+-#include <linux/types.h>
+ 
+ /* Cortex-A9 revisions */
+ #define MIDR_CORTEX_A9_R0P1	0x410FC091
+@@ -56,6 +55,9 @@
+ #define ARMV7_CLIDR_CTYPE_INSTRUCTION_DATA	3
+ #define ARMV7_CLIDR_CTYPE_UNIFIED		4
+ 
++#ifndef __ASSEMBLY__
++#include <linux/types.h>
++
+ /*
+  * CP15 Barrier instructions
+  * Please note that we have separate barrier instructions in ARMv7
+@@ -83,4 +85,6 @@ void v7_outer_cache_inval_all(void);
+ void v7_outer_cache_flush_range(u32 start, u32 end);
+ void v7_outer_cache_inval_range(u32 start, u32 end);
+ 
++#endif /* ! __ASSEMBLY__ */
++
+ #endif
+-- 
+2.7.4
+

@@ -1,0 +1,29 @@
+From 58a51ced4bb8b481bc2858ea7a9a9761bd63e77c Mon Sep 17 00:00:00 2001
+From: Marc Zyngier <marc.zyngier@arm.com>
+Date: Sat, 12 Jul 2014 14:23:59 +0100
+Subject: [PATCH 10/18] ARM: HYP/non-sec: add a barrier after setting SCR.NS==1
+
+A CP15 instruction execution can be reordered, requiring an
+isb to be sure it is executed in program order.
+
+Signed-off-by: Marc Zyngier <marc.zyngier@arm.com>
+Acked-by: Ian Campbell <ijc@hellion.org.uk>
+---
+ arch/arm/cpu/armv7/nonsec_virt.S | 1 +
+ 1 file changed, 1 insertion(+)
+
+diff --git a/arch/arm/cpu/armv7/nonsec_virt.S b/arch/arm/cpu/armv7/nonsec_virt.S
+index ee36760..b317c72 100644
+--- a/arch/arm/cpu/armv7/nonsec_virt.S
++++ b/arch/arm/cpu/armv7/nonsec_virt.S
+@@ -62,6 +62,7 @@ _secure_monitor:
+ #endif
+ 
+ 	mcr	p15, 0, r1, c1, c1, 0		@ write SCR (with NS bit set)
++	isb
+ 
+ #ifdef CONFIG_ARMV7_VIRT
+ 	mrceq	p15, 0, r0, c12, c0, 1		@ get MVBAR value
+-- 
+2.7.4
+

@@ -1,0 +1,192 @@
+From 0ad2ab82209f42e45853146f13ef3653874d6bf0 Mon Sep 17 00:00:00 2001
+From: Andre Przywara <andre.przywara@linaro.org>
+Date: Thu, 19 Sep 2013 18:06:42 +0200
+Subject: [PATCH 04/18] ARM: add C function to switch to non-secure state
+
+The core specific part of the work is done in the assembly routine
+in nonsec_virt.S, introduced with the previous patch, but for the full
+glory we need to setup the GIC distributor interface once for the
+whole system, which is done in C here.
+The routine is placed in arch/arm/cpu/armv7 to allow easy access from
+other ARMv7 boards.
+
+We check the availability of the security extensions first.
+
+Since we need a safe way to access the GIC, we use the PERIPHBASE
+registers on Cortex-A15 and A7 CPUs and do some sanity checks.
+Boards not implementing the CBAR can override this value via a
+configuration file variable.
+
+Then we actually do the GIC enablement:
+a) enable the GIC distributor, both for non-secure and secure state
+   (GICD_CTLR[1:0] = 11b)
+b) allow all interrupts to be handled from non-secure state
+   (GICD_IGROUPRn = 0xFFFFFFFF)
+
+The core specific GIC setup is then done in the assembly routine.
+
+Signed-off-by: Andre Przywara <andre.przywara@linaro.org>
+---
+ arch/arm/cpu/armv7/Makefile  |   1 +
+ arch/arm/cpu/armv7/virt-v7.c | 122 +++++++++++++++++++++++++++++++++++++++++++
+ arch/arm/include/asm/armv7.h |   3 ++
+ 3 files changed, 126 insertions(+)
+ create mode 100644 arch/arm/cpu/armv7/virt-v7.c
+
+diff --git a/arch/arm/cpu/armv7/Makefile b/arch/arm/cpu/armv7/Makefile
+index 01f2905..d3e6e82 100644
+--- a/arch/arm/cpu/armv7/Makefile
++++ b/arch/arm/cpu/armv7/Makefile
+@@ -38,6 +38,7 @@ endif
+ 
+ ifneq ($(CONFIG_ARMV7_NONSEC),)
+ SOBJS	+= nonsec_virt.o
++COBJS	+= virt-v7.o
+ endif
+ 
+ SRCS	:= $(START:.o=.S) $(COBJS:.o=.c)
+diff --git a/arch/arm/cpu/armv7/virt-v7.c b/arch/arm/cpu/armv7/virt-v7.c
+new file mode 100644
+index 0000000..068ac85
+--- /dev/null
++++ b/arch/arm/cpu/armv7/virt-v7.c
+@@ -0,0 +1,122 @@
++/*
++ * (C) Copyright 2013
++ * Andre Przywara, Linaro
++ *
++ * Routines to transition ARMv7 processors from secure into non-secure state
++ * needed to enable ARMv7 virtualization for current hypervisors
++ *
++ * See file CREDITS for list of people who contributed to this
++ * project.
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License as
++ * published by the Free Software Foundation; either version 2 of
++ * the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
++ * MA 02111-1307 USA
++ */
++
++#include <common.h>
++#include <asm/armv7.h>
++#include <asm/gic.h>
++#include <asm/io.h>
++
++unsigned long gic_dist_addr;
++
++static unsigned int read_id_pfr1(void)
++{
++	unsigned int reg;
++
++	asm("mrc p15, 0, %0, c0, c1, 1\n" : "=r"(reg));
++	return reg;
++}
++
++static unsigned long get_gicd_base_address(void)
++{
++#ifdef CONFIG_ARM_GIC_BASE_ADDRESS
++	return CONFIG_ARM_GIC_BASE_ADDRESS + GIC_DIST_OFFSET;
++#else
++	unsigned midr;
++	unsigned periphbase;
++
++	/* check whether we are an Cortex-A15 or A7.
++	 * The actual HYP switch should work with all CPUs supporting
++	 * the virtualization extension, but we need the GIC address,
++	 * which we know only for sure for those two CPUs.
++	 */
++	asm("mrc p15, 0, %0, c0, c0, 0\n" : "=r"(midr));
++	switch (midr & MIDR_PRIMARY_PART_MASK) {
++	case MIDR_CORTEX_A9_R0P1:
++	case MIDR_CORTEX_A15_R0P0:
++	case MIDR_CORTEX_A7_R0P0:
++		break;
++	default:
++		printf("nonsec: could not determine GIC address.\n");
++		return -1;
++	}
++
++	/* get the GIC base address from the CBAR register */
++	asm("mrc p15, 4, %0, c15, c0, 0\n" : "=r" (periphbase));
++
++	/* the PERIPHBASE can be mapped above 4 GB (lower 8 bits used to
++	 * encode this). Bail out here since we cannot access this without
++	 * enabling paging.
++	 */
++	if ((periphbase & 0xff) != 0) {
++		printf("nonsec: PERIPHBASE is above 4 GB, no access.\n");
++		return -1;
++	}
++
++	return (periphbase & CBAR_MASK) + GIC_DIST_OFFSET;
++#endif
++}
++
++int armv7_switch_nonsec(void)
++{
++	unsigned int reg;
++	unsigned itlinesnr, i;
++
++	/* check whether the CPU supports the security extensions */
++	reg = read_id_pfr1();
++	if ((reg & 0xF0) == 0) {
++		printf("nonsec: Security extensions not implemented.\n");
++		return -1;
++	}
++
++	/* the SCR register will be set directly in the monitor mode handler,
++	 * according to the spec one should not tinker with it in secure state
++	 * in SVC mode. Do not try to read it once in non-secure state,
++	 * any access to it will trap.
++	 */
++
++	gic_dist_addr = get_gicd_base_address();
++	if (gic_dist_addr == -1)
++		return -1;
++
++	/* enable the GIC distributor */
++	writel(readl(gic_dist_addr + GICD_CTLR) | 0x03,
++	       gic_dist_addr + GICD_CTLR);
++
++	/* TYPER[4:0] contains an encoded number of available interrupts */
++	itlinesnr = readl(gic_dist_addr + GICD_TYPER) & 0x1f;
++
++	/* set all bits in the GIC group registers to one to allow access
++	 * from non-secure state. The first 32 interrupts are private per
++	 * CPU and will be set later when enabling the GIC for each core
++	 */
++	for (i = 1; i <= itlinesnr; i++)
++		writel((unsigned)-1, gic_dist_addr + GICD_IGROUPRn + 4 * i);
++
++	/* call the non-sec switching code on this CPU */
++	_nonsec_init();
++
++	return 0;
++}
+diff --git a/arch/arm/include/asm/armv7.h b/arch/arm/include/asm/armv7.h
+index 1309d88..53f753a 100644
+--- a/arch/arm/include/asm/armv7.h
++++ b/arch/arm/include/asm/armv7.h
+@@ -102,6 +102,9 @@ void v7_outer_cache_flush_range(u32 start, u32 end);
+ void v7_outer_cache_inval_range(u32 start, u32 end);
+ 
+ #ifdef CONFIG_ARMV7_NONSEC
++
++int armv7_switch_nonsec(void);
++
+ /* defined in assembly file */
+ unsigned int _nonsec_init(void);
+ #endif /* CONFIG_ARMV7_NONSEC */
+-- 
+2.7.4
+

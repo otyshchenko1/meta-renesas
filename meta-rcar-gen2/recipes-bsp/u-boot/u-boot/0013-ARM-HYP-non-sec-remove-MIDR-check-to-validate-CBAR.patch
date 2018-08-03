@@ -1,0 +1,57 @@
+From 6ae30fd63b582ca6dafa942cb3fa3d7338977838 Mon Sep 17 00:00:00 2001
+From: Marc Zyngier <marc.zyngier@arm.com>
+Date: Sat, 12 Jul 2014 14:24:08 +0100
+Subject: [PATCH 13/18] ARM: HYP/non-sec: remove MIDR check to validate CBAR
+
+Having a form of whitelist to check if we know of a CPU core
+and and obtain CBAR is a bit silly.
+
+It doesn't scale (how about A12, A17, as well as other I don't know
+about?), and is actually a property of the SoC, not the core.
+
+So either it works and everybody is happy, or it doesn't and
+the u-boot port to this SoC is providing the real address via
+a configuration option.
+
+The result of the above is that this code doesn't need to exist,
+is thus forcefully removed.
+
+Signed-off-by: Marc Zyngier <marc.zyngier@arm.com>
+Acked-by: Ian Campbell <ijc@hellion.org.uk>
+---
+ arch/arm/cpu/armv7/virt-v7.c | 17 -----------------
+ 1 file changed, 17 deletions(-)
+
+diff --git a/arch/arm/cpu/armv7/virt-v7.c b/arch/arm/cpu/armv7/virt-v7.c
+index 6de7fe7..64dac0f 100644
+--- a/arch/arm/cpu/armv7/virt-v7.c
++++ b/arch/arm/cpu/armv7/virt-v7.c
+@@ -53,25 +53,8 @@ static unsigned long get_gicd_base_address(void)
+ #ifdef CONFIG_ARM_GIC_BASE_ADDRESS
+ 	return CONFIG_ARM_GIC_BASE_ADDRESS + GIC_DIST_OFFSET;
+ #else
+-	unsigned midr;
+ 	unsigned periphbase;
+ 
+-	/* check whether we are an Cortex-A15 or A7.
+-	 * The actual HYP switch should work with all CPUs supporting
+-	 * the virtualization extension, but we need the GIC address,
+-	 * which we know only for sure for those two CPUs.
+-	 */
+-	asm("mrc p15, 0, %0, c0, c0, 0\n" : "=r"(midr));
+-	switch (midr & MIDR_PRIMARY_PART_MASK) {
+-	case MIDR_CORTEX_A9_R0P1:
+-	case MIDR_CORTEX_A15_R0P0:
+-	case MIDR_CORTEX_A7_R0P0:
+-		break;
+-	default:
+-		printf("nonsec: could not determine GIC address.\n");
+-		return -1;
+-	}
+-
+ 	/* get the GIC base address from the CBAR register */
+ 	asm("mrc p15, 4, %0, c15, c0, 0\n" : "=r" (periphbase));
+ 
+-- 
+2.7.4
+

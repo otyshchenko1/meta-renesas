@@ -1,0 +1,42 @@
+From 9765bad5a8880affa725dead002268204e603f80 Mon Sep 17 00:00:00 2001
+From: Masahiro Yamada <yamada.m@jp.panasonic.com>
+Date: Mon, 7 Oct 2013 11:46:56 +0900
+Subject: [PATCH 08/18] ARM: align MVBAR on 32 byte boundary
+
+The lower 5 bit of MVBAR is UNK/SBZP.
+So, Monitor Vector Base Address must be 32-byte aligned.
+On the other hand, the secure monitor handler does not need
+32-byte alignment.
+
+This commit moves ".algin 5" directive to the correct place.
+
+Signed-off-by: Masahiro Yamada <yamada.m@jp.panasonic.com>
+Cc: Andre Przywara <andre.przywara@linaro.org>
+Acked-by: Andre Przywara <andre.przywara@linaro.org>
+---
+ arch/arm/cpu/armv7/nonsec_virt.S | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm/cpu/armv7/nonsec_virt.S b/arch/arm/cpu/armv7/nonsec_virt.S
+index 358348f..ee36760 100644
+--- a/arch/arm/cpu/armv7/nonsec_virt.S
++++ b/arch/arm/cpu/armv7/nonsec_virt.S
+@@ -30,6 +30,7 @@
+ .arch_extension sec
+ .arch_extension virt
+ 
++	.align	5
+ /* the vector table for secure state and HYP mode */
+ _monitor_vectors:
+ 	.word 0	/* reset */
+@@ -48,7 +49,6 @@ _monitor_vectors:
+  * to non-secure state.
+  * We use only r0 and r1 here, due to constraints in the caller.
+  */
+-	.align	5
+ _secure_monitor:
+ 	mrc	p15, 0, r1, c1, c1, 0		@ read SCR
+ 	bic	r1, r1, #0x4e			@ clear IRQ, FIQ, EA, nET bits
+-- 
+2.7.4
+

@@ -1,0 +1,43 @@
+From cf46f4cca13a85d6cdbf9a6068fd26e09ece8bda Mon Sep 17 00:00:00 2001
+From: Andrii Anisov <andrii.anisov@gmail.com>
+Date: Tue, 15 Nov 2016 15:35:03 +0200
+Subject: [PATCH 17/18] ARM: HYP/non-sec: drop arch time initialization
+
+Drop arch timer initilization from the generic code.
+This should be done from platform specific code. Also at this point
+CONFIG_SYS_CLK_FREQ specifies a board oscilator frequency, not an arch
+timer frequency.
+
+Signed-off-by: Andrii Anisov <andrii.anisov@gmail.com>
+---
+ arch/arm/cpu/armv7/nonsec_virt.S | 14 --------------
+ 1 file changed, 14 deletions(-)
+
+diff --git a/arch/arm/cpu/armv7/nonsec_virt.S b/arch/arm/cpu/armv7/nonsec_virt.S
+index 47240c6..32ba568 100644
+--- a/arch/arm/cpu/armv7/nonsec_virt.S
++++ b/arch/arm/cpu/armv7/nonsec_virt.S
+@@ -170,20 +170,6 @@ ENTRY(_nonsec_init)
+ 	orr	r0, r0, r1
+ 	mcr	p15, 0, r0, c1, c1, 2		@ NSACR = all copros to non-sec
+ 
+-/* The CNTFRQ register of the generic timer needs to be
+- * programmed in secure state. Some primary bootloaders / firmware
+- * omit this, so if the frequency is provided in the configuration,
+- * we do this here instead.
+- * But first check if we have the generic timer.
+- */
+-#ifdef CONFIG_SYS_CLK_FREQ
+-	mrc	p15, 0, r0, c0, c1, 1		@ read ID_PFR1
+-	and	r0, r0, #CPUID_ARM_GENTIMER_MASK	@ mask arch timer bits
+-	cmp	r0, #(1 << CPUID_ARM_GENTIMER_SHIFT)
+-	ldreq	r1, =CONFIG_SYS_CLK_FREQ
+-	mcreq	p15, 0, r1, c14, c0, 0		@ write CNTFRQ
+-#endif
+-
+ 	adr	r1, _monitor_vectors
+ 	mcr	p15, 0, r1, c12, c0, 1		@ set MVBAR to secure vectors
+ 	isb
+-- 
+2.7.4
+

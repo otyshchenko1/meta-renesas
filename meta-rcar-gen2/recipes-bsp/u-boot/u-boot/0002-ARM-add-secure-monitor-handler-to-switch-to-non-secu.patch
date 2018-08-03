@@ -1,0 +1,100 @@
+From d351625b7f927849ab73a03d0cf3336fc692614c Mon Sep 17 00:00:00 2001
+From: Andre Przywara <andre.przywara@linaro.org>
+Date: Thu, 19 Sep 2013 18:06:40 +0200
+Subject: [PATCH 02/18] ARM: add secure monitor handler to switch to non-secure
+ state
+
+A prerequisite for using virtualization is to be in HYP mode, which
+requires the CPU to be in non-secure state first.
+Add a new file in arch/arm/cpu/armv7 to hold a monitor handler routine
+which switches the CPU to non-secure state by setting the NS and
+associated bits.
+According to the ARM architecture reference manual this should not be
+done in SVC mode, so we have to setup a SMC handler for this.
+We create a new vector table to avoid interference with other boards.
+The MVBAR register will be programmed later just before the smc call.
+
+Signed-off-by: Andre Przywara <andre.przywara@linaro.org>
+---
+ arch/arm/cpu/armv7/Makefile      |  4 +++
+ arch/arm/cpu/armv7/nonsec_virt.S | 53 ++++++++++++++++++++++++++++++++++++++++
+ 2 files changed, 57 insertions(+)
+ create mode 100644 arch/arm/cpu/armv7/nonsec_virt.S
+
+diff --git a/arch/arm/cpu/armv7/Makefile b/arch/arm/cpu/armv7/Makefile
+index 4fdbee4..01f2905 100644
+--- a/arch/arm/cpu/armv7/Makefile
++++ b/arch/arm/cpu/armv7/Makefile
+@@ -36,6 +36,10 @@ ifneq ($(CONFIG_AM33XX)$(CONFIG_OMAP44XX)$(CONFIG_OMAP54XX)$(CONFIG_TEGRA20),)
+ SOBJS	+= lowlevel_init.o
+ endif
+ 
++ifneq ($(CONFIG_ARMV7_NONSEC),)
++SOBJS	+= nonsec_virt.o
++endif
++
+ SRCS	:= $(START:.o=.S) $(COBJS:.o=.c)
+ OBJS	:= $(addprefix $(obj),$(COBJS) $(SOBJS))
+ START	:= $(addprefix $(obj),$(START))
+diff --git a/arch/arm/cpu/armv7/nonsec_virt.S b/arch/arm/cpu/armv7/nonsec_virt.S
+new file mode 100644
+index 0000000..d11eb2d
+--- /dev/null
++++ b/arch/arm/cpu/armv7/nonsec_virt.S
+@@ -0,0 +1,53 @@
++/*
++ * code for switching cores into non-secure state
++ *
++ * Copyright (c) 2013	Andre Przywara <andre.przywara@linaro.org>
++ *
++ * See file CREDITS for list of people who contributed to this
++ * project.
++ *
++ * This program is free software; you can redistribute it and/or
++ * modify it under the terms of the GNU General Public License as
++ * published by the Free Software Foundation; either version 2 of
++ * the License, or (at your option) any later version.
++ *
++ * This program is distributed in the hope that it will be useful,
++ * but WITHOUT ANY WARRANTY; without even the implied warranty of
++ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
++ * GNU General Public License for more details.
++ *
++ * You should have received a copy of the GNU General Public License
++ * along with this program; if not, write to the Free Software
++ * Foundation, Inc., 59 Temple Place, Suite 330, Boston,
++ * MA 02111-1307 USA
++ */
++
++#include <config.h>
++
++/* the vector table for secure state */
++_monitor_vectors:
++	.word 0	/* reset */
++	.word 0 /* undef */
++	adr pc, _secure_monitor
++	.word 0
++	.word 0
++	.word 0
++	.word 0
++	.word 0
++
++/*
++ * secure monitor handler
++ * U-boot calls this "software interrupt" in start.S
++ * This is executed on a "smc" instruction, we use a "smc #0" to switch
++ * to non-secure state.
++ * We use only r0 and r1 here, due to constraints in the caller.
++ */
++	.align	5
++_secure_monitor:
++	mrc	p15, 0, r1, c1, c1, 0		@ read SCR
++	bic	r1, r1, #0x4e			@ clear IRQ, FIQ, EA, nET bits
++	orr	r1, r1, #0x31			@ enable NS, AW, FW bits
++
++	mcr	p15, 0, r1, c1, c1, 0		@ write SCR (with NS bit set)
++
++	movs	pc, lr				@ return to non-secure SVC
+-- 
+2.7.4
+

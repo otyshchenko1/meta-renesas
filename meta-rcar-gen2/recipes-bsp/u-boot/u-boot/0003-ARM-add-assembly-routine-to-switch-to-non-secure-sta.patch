@@ -1,0 +1,217 @@
+From d908d0f48bc753726eb853d61aea731fae256cae Mon Sep 17 00:00:00 2001
+From: Andre Przywara <andre.przywara@linaro.org>
+Date: Thu, 19 Sep 2013 18:06:41 +0200
+Subject: [PATCH 03/18] ARM: add assembly routine to switch to non-secure state
+
+While actually switching to non-secure state is one thing, another
+part of this process is to make sure that we still have full access
+to the interrupt controller (GIC).
+The GIC is fully aware of secure vs. non-secure state, some
+registers are banked, others may be configured to be accessible from
+secure state only.
+To be as generic as possible, we get the GIC memory mapped address
+based on the PERIPHBASE value in the CBAR register. Since this
+register is not architecturally defined, we check the MIDR before to
+be from an A15 or A7.
+For CPUs not having the CBAR or boards with wrong information herein
+we allow providing the base address as a configuration variable.
+
+Now that we know the GIC address, we:
+a) allow private interrupts to be delivered to the core
+   (GICD_IGROUPR0 = 0xFFFFFFFF)
+b) enable the CPU interface (GICC_CTLR[0] = 1)
+c) set the priority filter to allow non-secure interrupts
+   (GICC_PMR = 0xFF)
+
+Also we allow access to all coprocessor interfaces from non-secure
+state by writing the appropriate bits in the NSACR register.
+
+The generic timer base frequency register is only accessible from
+secure state, so we have to program it now. Actually this should be
+done from primary firmware before, but some boards seems to omit
+this, so if needed we do this here with a board specific value.
+The Versatile Express board does not need this, so we remove the
+frequency from the configuration file here.
+
+After having switched to non-secure state, we also enable the
+non-secure GIC CPU interface, since this register is banked.
+
+Since we need to call this routine also directly from the smp_pen
+later (where we don't have any stack), we can only use caller saved
+registers r0-r3 and r12 to not mess with the compiler.
+
+Signed-off-by: Andre Przywara <andre.przywara@linaro.org>
+---
+ arch/arm/cpu/armv7/nonsec_virt.S | 87 ++++++++++++++++++++++++++++++++++++++++
+ arch/arm/include/asm/armv7.h     | 21 ++++++++++
+ arch/arm/include/asm/gic.h       | 17 ++++++++
+ 3 files changed, 125 insertions(+)
+ create mode 100644 arch/arm/include/asm/gic.h
+
+diff --git a/arch/arm/cpu/armv7/nonsec_virt.S b/arch/arm/cpu/armv7/nonsec_virt.S
+index d11eb2d..3dd60b7 100644
+--- a/arch/arm/cpu/armv7/nonsec_virt.S
++++ b/arch/arm/cpu/armv7/nonsec_virt.S
+@@ -23,6 +23,11 @@
+  */
+ 
+ #include <config.h>
++#include <linux/linkage.h>
++#include <asm/gic.h>
++#include <asm/armv7.h>
++
++.arch_extension sec
+ 
+ /* the vector table for secure state */
+ _monitor_vectors:
+@@ -51,3 +56,85 @@ _secure_monitor:
+ 	mcr	p15, 0, r1, c1, c1, 0		@ write SCR (with NS bit set)
+ 
+ 	movs	pc, lr				@ return to non-secure SVC
++
++/*
++ * Switch a core to non-secure state.
++ *
++ *  1. initialize the GIC per-core interface
++ *  2. allow coprocessor access in non-secure modes
++ *  3. switch the cpu mode (by calling "smc #0")
++ *
++ * Called from smp_pen by secondary cores and directly by the BSP.
++ * Do not assume that the stack is available and only use registers
++ * r0-r3 and r12.
++ *
++ * PERIPHBASE is used to get the GIC address. This could be 40 bits long,
++ * though, but we check this in C before calling this function.
++ */
++ENTRY(_nonsec_init)
++#ifdef CONFIG_ARM_GIC_BASE_ADDRESS
++	ldr	r2, =CONFIG_ARM_GIC_BASE_ADDRESS
++#else
++	mrc	p15, 4, r2, c15, c0, 0		@ read CBAR
++	bfc	r2, #0, #15			@ clear reserved bits
++#endif
++	add	r3, r2, #GIC_DIST_OFFSET	@ GIC dist i/f offset
++	mvn	r1, #0				@ all bits to 1
++	str	r1, [r3, #GICD_IGROUPRn]	@ allow private interrupts
++
++	mrc	p15, 0, r0, c0, c0, 0		@ read MIDR
++	ldr	r1, =MIDR_PRIMARY_PART_MASK
++	and	r0, r0, r1			@ mask out variant and revision
++
++	ldr	r1, =MIDR_CORTEX_A7_R0P0 & MIDR_PRIMARY_PART_MASK
++	cmp	r0, r1				@ check for Cortex-A7
++
++	ldr	r1, =MIDR_CORTEX_A15_R0P0 & MIDR_PRIMARY_PART_MASK
++	cmpne	r0, r1				@ check for Cortex-A15
++
++	movne	r1, #GIC_CPU_OFFSET_A9		@ GIC CPU offset for A9
++	moveq	r1, #GIC_CPU_OFFSET_A15		@ GIC CPU offset for A15/A7
++	add	r3, r2, r1			@ r3 = GIC CPU i/f addr
++
++	mov	r1, #1				@ set GICC_CTLR[enable]
++	str	r1, [r3, #GICC_CTLR]		@ and clear all other bits
++	mov	r1, #0xff
++	str	r1, [r3, #GICC_PMR]		@ set priority mask register
++
++	movw	r1, #0x3fff
++	movt	r1, #0x0006
++	mcr	p15, 0, r1, c1, c1, 2		@ NSACR = all copros to non-sec
++
++/* The CNTFRQ register of the generic timer needs to be
++ * programmed in secure state. Some primary bootloaders / firmware
++ * omit this, so if the frequency is provided in the configuration,
++ * we do this here instead.
++ * But first check if we have the generic timer.
++ */
++#ifdef CONFIG_SYS_CLK_FREQ
++	mrc	p15, 0, r0, c0, c1, 1		@ read ID_PFR1
++	and	r0, r0, #CPUID_ARM_GENTIMER_MASK	@ mask arch timer bits
++	cmp	r0, #(1 << CPUID_ARM_GENTIMER_SHIFT)
++	ldreq	r1, =CONFIG_SYS_CLK_FREQ
++	mcreq	p15, 0, r1, c14, c0, 0		@ write CNTFRQ
++#endif
++
++	adr	r1, _monitor_vectors
++	mcr	p15, 0, r1, c12, c0, 1		@ set MVBAR to secure vectors
++
++	mrc	p15, 0, ip, c12, c0, 0		@ save secure copy of VBAR
++
++	isb
++	smc	#0				@ call into MONITOR mode
++
++	mcr	p15, 0, ip, c12, c0, 0		@ write non-secure copy of VBAR
++
++	mov	r1, #1
++	str	r1, [r3, #GICC_CTLR]		@ enable non-secure CPU i/f
++	add	r2, r2, #GIC_DIST_OFFSET
++	str	r1, [r2, #GICD_CTLR]		@ allow private interrupts
++
++	mov	r0, r3				@ return GICC address
++
++	bx	lr
++ENDPROC(_nonsec_init)
+diff --git a/arch/arm/include/asm/armv7.h b/arch/arm/include/asm/armv7.h
+index 2fa89d2..1309d88 100644
+--- a/arch/arm/include/asm/armv7.h
++++ b/arch/arm/include/asm/armv7.h
+@@ -33,6 +33,22 @@
+ /* Cortex-A15 revisions */
+ #define MIDR_CORTEX_A15_R0P0	0x410FC0F0
+ 
++/* Cortex-A7 revisions */
++#define MIDR_CORTEX_A7_R0P0	0x410FC070
++
++#define MIDR_PRIMARY_PART_MASK	0xFF0FFFF0
++
++/* ID_PFR1 feature fields */
++#define CPUID_ARM_SEC_SHIFT		4
++#define CPUID_ARM_SEC_MASK		(0xF << CPUID_ARM_SEC_SHIFT)
++#define CPUID_ARM_VIRT_SHIFT		12
++#define CPUID_ARM_VIRT_MASK		(0xF << CPUID_ARM_VIRT_SHIFT)
++#define CPUID_ARM_GENTIMER_SHIFT	16
++#define CPUID_ARM_GENTIMER_MASK		(0xF << CPUID_ARM_GENTIMER_SHIFT)
++
++/* valid bits in CBAR register / PERIPHBASE value */
++#define CBAR_MASK			0xFFFF8000
++
+ /* CCSIDR */
+ #define CCSIDR_LINE_SIZE_OFFSET		0
+ #define CCSIDR_LINE_SIZE_MASK		0x7
+@@ -85,6 +101,11 @@ void v7_outer_cache_inval_all(void);
+ void v7_outer_cache_flush_range(u32 start, u32 end);
+ void v7_outer_cache_inval_range(u32 start, u32 end);
+ 
++#ifdef CONFIG_ARMV7_NONSEC
++/* defined in assembly file */
++unsigned int _nonsec_init(void);
++#endif /* CONFIG_ARMV7_NONSEC */
++
+ #endif /* ! __ASSEMBLY__ */
+ 
+ #endif
+diff --git a/arch/arm/include/asm/gic.h b/arch/arm/include/asm/gic.h
+new file mode 100644
+index 0000000..c2b1e28
+--- /dev/null
++++ b/arch/arm/include/asm/gic.h
+@@ -0,0 +1,17 @@
++#ifndef __GIC_V2_H__
++#define __GIC_V2_H__
++
++/* register offsets for the ARM generic interrupt controller (GIC) */
++
++#define GIC_DIST_OFFSET		0x1000
++#define GICD_CTLR		0x0000
++#define GICD_TYPER		0x0004
++#define GICD_IGROUPRn		0x0080
++#define GICD_SGIR		0x0F00
++
++#define GIC_CPU_OFFSET_A9	0x0100
++#define GIC_CPU_OFFSET_A15	0x2000
++#define GICC_CTLR		0x0000
++#define GICC_PMR		0x0004
++
++#endif
+-- 
+2.7.4
+
