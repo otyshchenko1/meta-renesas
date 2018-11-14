@@ -177,7 +177,6 @@ SRC_URI_append_lcb = " \
     file://stout/07-r8a7790-stout/0004-Modify-Stout-device-tree-to-be-able-to-run-under-Xen.patch \
     file://stout/07-r8a7790-stout/0005-r8a7790.dtsi-Correct-GIC-CPU-interface-range.patch \
     file://stout/07-r8a7790-stout/0006-Modify-shmobile-defconfig-to-be-able-to-run-under-Xe.patch \
-    file://stout/07-r8a7790-stout/0001-Set-root-to-dev-mmcblk0p1-SD-card-instead-of-dev-nfs.patch \
 "
 
 SRC_URI_append_porter = " file://porter.cfg"
