@@ -1,0 +1,83 @@
+From dcef094c8093e103f77ab66d182a08f64df77f2c Mon Sep 17 00:00:00 2001
+From: Oleksandr Tyshchenko <oleksandr_tyshchenko@epam.com>
+Date: Wed, 25 Jul 2018 17:47:01 +0300
+Subject: [PATCH 3/6] Modify platform Gen2 code to be able to run under Xen
+
+1. Arch timer is configured in U-Boot, so don't touch it here.
+2. All A15 cores are brought up and translated to HYP mode in U-Boot,
+   so don't power up/down them here. Use PSCI instead.
+
+Signed-off-by: Oleksandr Tyshchenko <oleksandr_tyshchenko@epam.com>
+---
+ arch/arm/mach-shmobile/platsmp-apmu.c    | 9 +++++++++
+ arch/arm/mach-shmobile/setup-rcar-gen2.c | 2 +-
+ arch/arm/mach-shmobile/smp-r8a7790.c     | 2 ++
+ 3 files changed, 12 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/mach-shmobile/platsmp-apmu.c b/arch/arm/mach-shmobile/platsmp-apmu.c
+index cff7a25..4b2d86e 100644
+--- a/arch/arm/mach-shmobile/platsmp-apmu.c
++++ b/arch/arm/mach-shmobile/platsmp-apmu.c
+@@ -25,6 +25,7 @@
+ #include <asm/cpuidle.h>
+ #include <asm/proc-fns.h>
+ #include <asm/smp_plat.h>
++#include <asm/psci.h>
+ #include <asm/suspend.h>
+ #include <mach/platsmp-apmu.h>
+ #include <mach/platsmp-rst.h>
+@@ -162,6 +163,13 @@ void __init shmobile_smp_apmu_prepare_cpus(unsigned int max_cpus,
+ int __cpuinit shmobile_smp_apmu_boot_secondary(unsigned int cpu,
+ 					       struct task_struct *idle)
+ {
++#if defined(CONFIG_XEN)
++	if (psci_ops.cpu_on)
++		return psci_ops.cpu_on(cpu_logical_map(cpu),
++				__pa(shmobile_invalidate_start));
++
++		return -ENODEV;
++#else
+ 	int ret;
+ 
+ 	/* For this particular CPU register boot vector */
+@@ -170,6 +178,7 @@ int __cpuinit shmobile_smp_apmu_boot_secondary(unsigned int cpu,
+ 	ret = apmu_wrap(cpu, apmu_power_on);
+ 	r8a779x_deassert_reset(cpu);
+ 	return ret;
++#endif
+ }
+ #endif
+ 
+diff --git a/arch/arm/mach-shmobile/setup-rcar-gen2.c b/arch/arm/mach-shmobile/setup-rcar-gen2.c
+index da16ebd..8c037f1 100644
+--- a/arch/arm/mach-shmobile/setup-rcar-gen2.c
++++ b/arch/arm/mach-shmobile/setup-rcar-gen2.c
+@@ -55,7 +55,7 @@ void __init rcar_gen2_timer_init(void)
+ #if defined(CONFIG_ARM_ARCH_TIMER) || defined(CONFIG_COMMON_CLK)
+ 	u32 mode = rcar_gen2_read_mode_pins();
+ #endif
+-#ifdef CONFIG_ARM_ARCH_TIMER
++#if defined(CONFIG_ARM_ARCH_TIMER) || !defined(CONFIG_XEN)
+ 	void __iomem *base;
+ 	int extal_mhz = 0;
+ 	u32 freq;
+diff --git a/arch/arm/mach-shmobile/smp-r8a7790.c b/arch/arm/mach-shmobile/smp-r8a7790.c
+index cb4448b..05df336 100644
+--- a/arch/arm/mach-shmobile/smp-r8a7790.c
++++ b/arch/arm/mach-shmobile/smp-r8a7790.c
+@@ -98,10 +98,12 @@ static void __init r8a7790_smp_prepare_cpus(unsigned int max_cpus)
+ 	rcar_sysc_power_up(&r8a7790_ca15_scu);
+ 	rcar_sysc_power_up(&r8a7790_ca7_scu);
+ 
++#if !defined(CONFIG_XEN)
+ 	/* keep secondary CPU cores in reset */
+ 	r8a779x_init_reset(r8a7790_rst_config);
+ 	for (k = 1; k < max_cpus; k++)
+ 		r8a779x_assert_reset(k);
++#endif
+ 
+ 	/* enable snoop and DVM */
+ 	p = ioremap_nocache(CCI_BASE, 0x8000);
+-- 
+2.7.4
+

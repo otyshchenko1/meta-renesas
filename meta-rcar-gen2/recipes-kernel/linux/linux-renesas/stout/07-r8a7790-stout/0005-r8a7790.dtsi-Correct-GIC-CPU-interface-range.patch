@@ -1,0 +1,29 @@
+From 6f5e8f5b58c26958810ab517081039efa759c63d Mon Sep 17 00:00:00 2001
+From: Oleksandr Tyshchenko <oleksandr_tyshchenko@epam.com>
+Date: Wed, 25 Jul 2018 20:19:28 +0300
+Subject: [PATCH 5/6] r8a7790.dtsi: Correct GIC CPU interface range
+
+According to this:
+http://lists.infradead.org/pipermail/linux-arm-kernel/2013-November/208693.html
+
+Signed-off-by: Oleksandr Tyshchenko <oleksandr_tyshchenko@epam.com>
+---
+ arch/arm/boot/dts/r8a7790.dtsi | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/arch/arm/boot/dts/r8a7790.dtsi b/arch/arm/boot/dts/r8a7790.dtsi
+index 4cf1ebb..ce01049 100644
+--- a/arch/arm/boot/dts/r8a7790.dtsi
++++ b/arch/arm/boot/dts/r8a7790.dtsi
+@@ -114,7 +114,7 @@
+ 		#address-cells = <0>;
+ 		interrupt-controller;
+ 		reg = <0 0xf1001000 0 0x1000>,
+-			<0 0xf1002000 0 0x1000>,
++			<0 0xf1002000 0 0x2000>,
+ 			<0 0xf1004000 0 0x2000>,
+ 			<0 0xf1006000 0 0x2000>;
+ 		interrupts = <1 9 (GIC_CPU_MASK_SIMPLE(4) | IRQ_TYPE_LEVEL_HIGH)>;
+-- 
+2.7.4
+

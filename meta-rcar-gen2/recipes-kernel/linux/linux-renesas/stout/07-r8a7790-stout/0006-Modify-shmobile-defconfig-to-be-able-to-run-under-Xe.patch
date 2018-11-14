@@ -1,0 +1,49 @@
+From bb230e90d226d5203c0a217df1fe695eca4a8857 Mon Sep 17 00:00:00 2001
+From: Oleksandr Tyshchenko <oleksandr_tyshchenko@epam.com>
+Date: Thu, 26 Jul 2018 19:25:35 +0300
+Subject: [PATCH 6/6] Modify shmobile defconfig to be able to run under Xen
+
+Signed-off-by: Oleksandr Tyshchenko <oleksandr_tyshchenko@epam.com>
+---
+ arch/arm/configs/shmobile_defconfig | 21 ++++++++++++++++++++-
+ 1 file changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/arch/arm/configs/shmobile_defconfig b/arch/arm/configs/shmobile_defconfig
+index efa3c16..d65c6cb 100644
+--- a/arch/arm/configs/shmobile_defconfig
++++ b/arch/arm/configs/shmobile_defconfig
+@@ -87,7 +87,7 @@ CONFIG_UEVENT_HELPER_PATH="/sbin/hotplug"
+ CONFIG_DEVTMPFS=y
+ CONFIG_DEVTMPFS_MOUNT=y
+ CONFIG_DMA_CMA=y
+-CONFIG_CMA_SIZE_MBYTES=256
++CONFIG_CMA_SIZE_MBYTES=128
+ CONFIG_MTD=y
+ CONFIG_MTD_BLOCK=y
+ CONFIG_MTD_CFI=y
+@@ -231,3 +231,22 @@ CONFIG_NLS_ISO8859_1=y
+ # CONFIG_ENABLE_WARN_DEPRECATED is not set
+ # CONFIG_ENABLE_MUST_CHECK is not set
+ # CONFIG_ARM_UNWIND is not set
++CONFIG_XEN=y
++CONFIG_XEN_DOM0=y
++CONFIG_HVC_XEN=y
++CONFIG_HVC_XEN_FRONTEND=y
++# CONFIG_XEN_WDT is not set
++CONFIG_XEN_DEV_EVTCHN=y
++CONFIG_XEN_BACKEND=y
++CONFIG_XENFS=y
++CONFIG_XEN_COMPAT_XENFS=y
++CONFIG_XEN_SYS_HYPERVISOR=y
++CONFIG_XEN_XENBUS_FRONTEND=y
++CONFIG_XEN_GNTDEV=y
++CONFIG_XEN_GRANT_DEV_ALLOC=y
++CONFIG_XEN_PRIVCMD=y
++# CONFIG_XEN_BLKDEV_FRONTEND is not set
++CONFIG_XEN_BLKDEV_BACKEND=y
++# CONFIG_XEN_NETDEV_FRONTEND is not set
++CONFIG_XEN_NETDEV_BACKEND=y
++# CONFIG_XEN_FBDEV_FRONTEND is not set
+-- 
+2.7.4
+
